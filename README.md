@@ -5,8 +5,8 @@ repository**, no Unity, no Gradle, no Android Studio required.
 
 [![APK](https://img.shields.io/badge/APK-last--star--1.0.0.apk-2ea44f)](apk/last-star-1.0.0.apk)
 [![minSdk](https://img.shields.io/badge/minSdk-21%20(Android%205.0)-blue)]()
-[![size](https://img.shields.io/badge/size-249%20KiB-informational)]()
-[![tests](https://img.shields.io/badge/headless%20checks-13%2C506%20passing-brightgreen)]()
+[![size](https://img.shields.io/badge/size-289%20KiB-informational)]()
+[![tests](https://img.shields.io/badge/headless%20checks-13%2C562%20passing-brightgreen)]()
 [![licence](https://img.shields.io/badge/licence-EPL--2.0-lightgrey)](LICENSE)
 
 ![Last Star gameplay](docs/screenshots/02-gameplay.png)
@@ -26,9 +26,9 @@ repository**, no Unity, no Gradle, no Android Studio required.
 3. Launch **Last Star**. Hold the phone in landscape.
 
 Works on **every Android device since Android 5.0 (API 21)** — 32-bit, 64-bit,
-ARM and x86. No permissions at all: no internet, no ads, no analytics, ~250 KiB.
+ARM and x86. No permissions at all: no internet, no ads, no analytics, ~290 KiB.
 Signed with APK schemes v1 + v2 + v3
-(SHA-256 `c92377be7b06c8c49d07498247d14924e38f7bd49d339981beff924a0817b74b`).
+(SHA-256 `be17c7da78b93150f5309c54f857a87b6b3d3fc3dbe6eb30d4c69ad97e9ccf31`).
 
 ### Controls
 
@@ -39,7 +39,40 @@ Signed with APK schemes v1 + v2 + v3
 | **HIT** | Melee attack (3-hit combo, 110° arc) |
 | **JMP** | Jump |
 | **RUN** | Sprint (drains the blue stamina bar) |
-| ❙❙ / 🔊 icons, top left | Pause-resume state / mute (both remembered) |
+| ❙❙ / 🔊 icons, top left | Open the menus / mute (the ❙❙ button opens Settings) |
+| Bottom tab bar | Home · About · Shop · Quests · Wardrobe · Settings |
+
+### The interface
+
+The game opens on a painted title screen and the whole shell is a hand-built
+fantasy UI: midnight-navy vistas, ivory letter-spaced serif capitals, gold
+filigree frames with corner scrollwork, diamond tabs, parchment cards and teal
+"on" accents. Six pages, all reachable from the bottom bar:
+
+| Page | What it does |
+|---|---|
+| **Home** | Title plate, hero medallion, `‹ NAME ›` selector, **START** |
+| **About** | Illuminated scroll: the story, the task, the controls, build info |
+| **Shop** | Merchant's alcove, purse, eight trinket cards with prices; tap to inspect, PURCHASE to confirm |
+| **Quests** | Completed / Side / Main / Serve Quests tabs, a ribbon list and a parchment detail card with reward, status and shard pips |
+| **Wardrobe** | Category rail, the character standing on a lit dais, four body tiles, a 4×4 skin-and-eye swatch grid, HAIR / LIPS / FACE chips and **EQUIP** |
+| **Settings** | Five roman-numeral set tabs, an in-panel vertical volume slider, AUDIO / HAPTICS / CAMERA SHAKE toggles, a difficulty dropdown and **RESET** |
+
+Everything on those pages is live: the difficulty changes your starting health
+(140 / 100 / 80), the wardrobe swatch recolours the character's head in-game, and
+the volume, toggles, name and page choices persist across launches.
+
+![Home](docs/ui/screens/home.png)
+![Wardrobe](docs/ui/screens/wardrobe.png)
+![Quests](docs/ui/screens/quests.png)
+
+**No UI toolkit, no fonts, no drawables.** Every screen is batched triangles
+(`UiBatch`) drawn in one GL call. The typeface is `VectorFont`: a Trajan-style
+serif described as strokes in source, scan-converted at start-up into a signed
+distance-field atlas (320×322 bytes, ~20 ms on a desktop JVM), so 8-pixel
+small-caps stay crisp at any scale without shipping a TTF. Backdrops
+(`Backdrop`) are painted procedurally — layered gradients, ridgelines, light
+shafts, bokeh and drifting motes.
 
 ### The game
 
@@ -125,7 +158,7 @@ tools/fetch_toolchain.sh && source tools/.toolchain/env.sh
 tools/build_apk.sh
 # BUILD OK
 #   apk      : apk/last-star-1.0.0.apk
-#   size     : 249 KiB
+#   size     : 289 KiB
 #   minSdk   : 21
 ```
 
@@ -141,15 +174,17 @@ self-signed hobby key, not a Play Store identity.
 There is no GPU, emulator or phone in this environment, so correctness is proven
 two ways — `tools/run_tests.sh` runs both:
 
-1. **13,506 headless assertions** (`desktop/HeadlessTest.java`) drive the real
+1. **13,562 headless assertions** (`desktop/HeadlessTest.java`) drive the real
    simulation: terrain sampling, camera matrices and clamping, movement and
    stamina, melee arcs, enemy AI states, pickups, death/respawn, victory and
-   restart, mesh and index validity, the HUD font atlas, plus a bot that plays a
-   complete six-shard run at 60 Hz. Result: **PASS**, slowest simulated frame
-   0.5 ms.
+   restart, mesh and index validity, the HUD font atlas, **the menu screens**
+   (every page renders finite geometry, every tab routes to its page, START
+   launches, toggles/slider/tabs/swatches all respond to taps, every serif glyph
+   has ink, difficulty sets health), plus a bot that plays a complete six-shard
+   run at 60 Hz. Result: **PASS**, slowest simulated frame 0.8 ms.
 2. **A software rasteriser** (`desktop/Raster.java`) renders real frames from the
-   *shipping* terrain generator, character rig, camera and HUD code — that is
-   where `docs/screenshots/` comes from. It found two genuine bugs during
+   *shipping* terrain generator, character rig, camera, HUD and **menu code** —
+   that is where `docs/screenshots/` and `docs/ui/screens/` come from. It found two genuine bugs during
    development (inverted camera pitch, sign-flipped strafe vector) and one more
    in review (particle uniforms written to the wrong GL program).
 
@@ -161,18 +196,19 @@ Android 11+ requires.
 
 ```
 apk/                          ← the installable artefact
-app/src/main/java/            ← the game (30 classes, ~5,400 lines)
+app/src/main/java/            ← the game (44 classes, ~9,600 lines)
   com/laststar/game/
     core/     Vec3, Mat4, Noise, Terrain, Camera     (pure maths / world)
     world/    World, Player, Enemy, Shard, Pickup…   (pure simulation)
     gl/       SceneRenderer, Geometry, Shaders, Mesh (OpenGL ES 2.0)
     art/      HumanoidRig (procedural characters)
-    ui/       Hud, UiBatch, UiRenderer, TouchControls, Font
+    ui/       Menu, screens/, GenshinKit, Backdrop, TabBar, Style,
+              UiBatch, UiRenderer, AtlasFont, Font, VectorFont, Hud, TouchControls
     audio/    SoundFx (procedural PCM synthesis)
     Prefs.java                                        (settings, best runs)
 desktop/                      ← headless tests + software renderer
 tools/                        ← build, test, toolchain fetch, zipalign, icons
-docs/                         ← BUILD.md, screenshots, icon
+docs/                         ← BUILD.md, screenshots, ui/ (menu shots), icon
 upstream/                     ← the three repositories + their licences
 ```
 

@@ -85,6 +85,12 @@ public final class World {
         }
     };
 
+    /**
+     * 0 = easy, 1 = normal, 2 = hard. Set before {@link #beginRun()} to tune the
+     * run's starting health and sprint stamina.
+     */
+    public int difficulty = 1;
+
     public World(long seed) {
         this.worldSeed = (int) seed;
         this.rng = new Random(seed);
@@ -92,6 +98,45 @@ public final class World {
         this.player = new Player(spawnPoint());
         this.player.yaw = 180f;
         buildLevel(1);
+    }
+
+    /** Starts a fresh run at level 1, applying the current difficulty. */
+    public void beginRun() {
+        level = 0;
+        shardsCollected = 0;
+        deaths = 0;
+        kills = 0;
+        waterTime = 0f;
+        victoryFlash = 0f;
+        player.respawn(spawnPoint());
+        applyDifficulty();
+        buildLevel(1);
+        phase = Phase.INTRO;
+        phaseTimer = 0f;
+    }
+
+    /** Scales the player's starting resources to the chosen difficulty. */
+    public void applyDifficulty() {
+        float health;
+        float stamina;
+        switch (difficulty) {
+            case 0:
+                health = 140f;
+                stamina = 1.35f;
+                break;
+            case 2:
+                health = 80f;
+                stamina = 0.8f;
+                break;
+            case 1:
+            default:
+                health = 100f;
+                stamina = 1f;
+                break;
+        }
+        player.maxHealth = health;
+        player.health = health;
+        player.sprintStamina = stamina;
     }
 
     public Vec3 spawnPoint() {
@@ -546,7 +591,8 @@ public final class World {
         deaths = 0;
         kills = 0;
         player.respawn(spawnPoint());
-        player.maxHealth = 120f;
+        player.maxHealth += 20f;
+        player.health = player.maxHealth;
         player.sprintStamina = 1f;
         buildLevel(level + 1);
         phase = Phase.PLAYING;

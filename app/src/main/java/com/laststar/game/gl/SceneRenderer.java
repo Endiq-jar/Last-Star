@@ -321,7 +321,7 @@ public final class SceneRenderer {
         playerRig.pose(poseMatrices, modelMatrix, p.animPhase, moveAmount, p.attackFraction(),
                 !p.onGround, p.hitFlash);
         float flashBlend = p.invulnerability > 0f ? 0.35f + 0.25f * (float) Math.sin(time * 26f) : 0f;
-        drawRig(playerParts, 1f, flashBlend);
+        drawRig(playerParts, 1f, flashBlend, p.skinColour(), 0.85f);
     }
 
     /** Camera-projection cache refreshed once per frame for the prop passes. */
@@ -330,12 +330,23 @@ public final class SceneRenderer {
     /** Projection * view for the current frame. */
     private Mat4 frameViewProj = new Mat4();
     private Mat4 rigScratch = new Mat4();
+    /** Index of the head part in {@link #rigMeshes} (torso, hips, head...). */
+    private static final int HEAD_PART = 2;
 
     private void modelAt(Vec3 pos, float yawDeg) {
         modelMatrix.setMultiply(Mat4.translation(pos.x, pos.y, pos.z), Mat4.rotationY(yawDeg));
     }
 
     private void drawRig(Mesh[] parts, float alpha, float hitBlend) {
+        drawRig(parts, alpha, hitBlend, null, 0f);
+    }
+
+    /**
+     * Draws a rig, optionally blending one part (the head) towards the skin
+     * colour the player picked in the wardrobe.
+     */
+    private void drawRig(Mesh[] parts, float alpha, float hitBlend,
+                         float[] skin, float skinBlend) {
         sceneProgram.setAlpha(alpha);
         sceneProgram.setTintAmount(1f);
         for (int i = 0; i < parts.length; i++) {
@@ -345,6 +356,8 @@ public final class SceneRenderer {
             sceneProgram.setModel(part.m);
             if (hitBlend > 0f) {
                 sceneProgram.setTint(1f, 0.35f, 0.30f, hitBlend);
+            } else if (skin != null && skinBlend > 0f && i == HEAD_PART) {
+                sceneProgram.setTint(skin[0], skin[1], skin[2], skinBlend);
             } else {
                 sceneProgram.setTint(0f, 0f, 0f, 0f);
             }

@@ -39,6 +39,9 @@ public final class HeadlessTest {
         testGeometry();
         testFont();
         testUiBatch();
+        testMenuFont();
+        testMenuScreens();
+        testDifficulty();
         testWorldSimulation();
         testPlayerMovement();
         testCombat();
@@ -295,7 +298,8 @@ public final class HeadlessTest {
         }
         float[] uv = f.uv('A');
         check(uv[0] >= 0f && uv[0] <= 1f && uv[1] >= 0f && uv[1] <= 1f, "uv in range");
-        check(Font.textWidth("ABC", 2) == 3 * 6 * 2, "text width");
+        check(f.textWidth("ABC", 2) == 3 * 6 * 2, "text width");
+        check(f.glyphWidth() == Font.GLYPH_W && f.advance() == Font.ADVANCE, "atlas contract");
 
         // Every glyph must have at least one lit pixel (catch typos in the atlas).
         int empty = 0;
@@ -342,6 +346,145 @@ public final class HeadlessTest {
         for (UiBatch.Vertex v : b.vertices()) {
             check(!Float.isNaN(v.x), "no NaN in ui vertices");
         }
+    }
+
+    private static void testMenuFont() {
+        section("menu font");
+        com.laststar.game.ui.VectorFont vf = new com.laststar.game.ui.VectorFont();
+        check(vf.atlasWidth > 0 && vf.atlasHeight > 0, "serif atlas generated");
+        check(vf.glyphWidth() > 0 && vf.advance() > vf.glyphWidth(),
+                "serif metrics are design-space");
+        check(vf.coverageAtlas() == false, "serif atlas is a distance field");
+        String charset = vf.charset();
+        // Every glyph in the charset must carry ink inside its own UV cell,
+        // otherwise a letter would silently vanish from the menus.
+        int blank = 0;
+        for (int i = 0; i < charset.length(); i++) {
+            char c = charset.charAt(i);
+            if (c == ' ') {
+                continue;
+            }
+            float[] uv = vf.uv(c);
+            int x0 = (int) (uv[0] * vf.atlasWidth);
+            int y0 = (int) (uv[1] * vf.atlasHeight);
+            int w = Math.max(1, (int) (uv[2] * vf.atlasWidth));
+            int h = Math.max(1, (int) (uv[3] * vf.atlasHeight));
+            boolean any = false;
+            for (int y = y0; y < y0 + h && y < vf.atlasHeight; y++) {
+                for (int x = x0; x < x0 + w && x < vf.atlasWidth; x++) {
+                    if ((vf.atlas[y * vf.atlasWidth + x] & 0xFF) > 140) {
+                        any = true;
+                    }
+                }
+            }
+            if (!any) {
+                blank++;
+                System.out.println("  blank glyph: " + c);
+            }
+        }
+        check(blank == 0, "serif has ink for every glyph (" + blank + " blank)");
+        // Distinct glyphs must not share a UV rect.
+        check(vf.uv('A')[0] != vf.uv('B')[0], "glyph cells are distinct");
+        check(vf.textWidth("ABC", 2) == 3 * vf.advance() * 2, "serif text width");
+    }
+
+    private static void testMenuScreens() {
+        section("menu screens");
+        com.laststar.game.ui.Menu menu = new com.laststar.game.ui.Menu();
+        com.laststar.game.ui.VectorFont font = new com.laststar.game.ui.VectorFont();
+        com.laststar.game.ui.UiBatch batch = new com.laststar.game.ui.UiBatch();
+
+        // Every page must render without emitting NaN or a runaway vertex count.
+        com.laststar.game.ui.Menu.Page[] pages = com.laststar.game.ui.Menu.Page.values();
+        for (com.laststar.game.ui.Menu.Page page : pages) {
+            menu.shownForTest(page);
+            for (int i = 0; i < 20; i++) {
+                menu.update(1f / 60f);
+            }
+            batch.begin(720, 405);
+            menu.draw(batch, font);
+            check(batch.vertexCount() > 500, page + " page draws geometry");
+            check(batch.vertexCount() < 60000, page + " page stays within budget");
+            boolean finite = true;
+            for (com.laststar.game.ui.UiBatch.Vertex v : batch.vertices()) {
+                if (Float.isNaN(v.x) || Float.isNaN(v.y) || Float.isNaN(v.u)) {
+                    finite = false;
+                }
+            }
+            check(finite, page + " page has no NaN vertices");
+        }
+
+        // Tab bar routing: the five tabs map to their pages and back to home.
+        menu.shownForTest(com.laststar.game.ui.Menu.Page.HOME);
+        float width = 720f;
+        float height = 405f;
+        com.laststar.game.ui.TabBar tabs = menu.tabs();
+        for (int i = 0; i < com.laststar.game.ui.TabBar.Tab.values().length; i++) {
+            float x = tabs.tabX(i, width);
+            float y = height - com.laststar.game.ui.TabBar.HEIGHT * 0.5f;
+            menu.tap(x, y, width, height);
+            check(menu.page == com.laststar.game.ui.TabBar.Tab.values()[i].pageForTest(),
+                    "tab " + i + " opens its page");
+        }
+
+        // START leaves the menu and asks the surface to launch the game.
+        menu.shownForTest(com.laststar.game.ui.Menu.Page.HOME);
+        menu.startRequested = false;
+        menu.tap(width * 0.5f, height * 0.735f, width, height);
+        check(menu.startRequested, "START requests the game");
+        check(!menu.home.playerName().isEmpty(), "player name is set");
+
+        // Settings controls actually change state through hit-testing.
+        menu.shownForTest(com.laststar.game.ui.Menu.Page.SETTINGS);
+        boolean before = menu.settings.audio;
+        float toggleX = width * 0.135f + width * 0.700f - 50f - 26f + 25f;
+        float row0 = 405f * 0.245f + 30f;
+        menu.tap(toggleX, row0, width, height);
+        check(menu.settings.audio != before, "audio toggle flips");
+        // Slider drag sets the volume from the tapped height.
+        float sliderX = width * 0.135f + 54f;
+        menu.tap(sliderX, 405f * 0.245f + 34f, width, height);
+        check(menu.settings.masterVolume > 0.95f, "slider top is full volume");
+        menu.tap(sliderX, 405f * 0.245f + 405f * 0.400f - 30f, width, height);
+        check(menu.settings.masterVolume < 0.05f, "slider bottom is silent");
+        menu.release();
+
+        // The quest tabs and rows select different content.
+        menu.shownForTest(com.laststar.game.ui.Menu.Page.QUESTS);
+        int tabBefore = menu.quests.activeTab;
+        menu.tap(width * 0.185f + 3f * width * 0.155f, 405f * 0.175f, width, height);
+        check(menu.quests.activeTab != tabBefore, "quest tab switches");
+        menu.tap(60f, 405f * 0.255f + 2f * 39f, width, height);
+        check(menu.quests.selectedQuest == 2, "quest row selects");
+
+        // Wardrobe swatches are swappable.
+        menu.shownForTest(com.laststar.game.ui.Menu.Page.WARDROBE);
+        menu.tap(width * 0.545f + 12f + 20f, 405f * 0.190f + 32f + 20f, width, height);
+        check(menu.wardrobe.selectedSwatch == 0, "first swatch selects");
+    }
+
+    private static void testDifficulty() {
+        section("difficulty");
+        int[] expectedHealth = {140, 100, 80};
+        for (int d = 0; d < 3; d++) {
+            World w = new World(20261105L);
+            w.difficulty = d;
+            w.beginRun();
+            checkNear(w.player.maxHealth, expectedHealth[d], 0.01f,
+                    "difficulty " + d + " max health");
+            checkNear(w.player.health, expectedHealth[d], 0.01f,
+                    "difficulty " + d + " starts at full health");
+            check(w.phase == World.Phase.INTRO, "difficulty " + d + " begins at the intro");
+            check(w.level() == 1, "difficulty " + d + " starts at level 1");
+            check(w.shardsCollected == 0, "difficulty " + d + " starts with no shards");
+        }
+        // A restart keeps growing the player's pool instead of resetting it.
+        World w = new World(7L);
+        w.difficulty = 0;
+        w.beginRun();
+        w.restart();
+        checkNear(w.player.maxHealth, 160f, 0.01f, "restart grows max health");
+        check(w.level() == 2, "restart advances the level");
     }
 
     private static void testWorldSimulation() {

@@ -10,6 +10,7 @@ import com.laststar.game.core.Camera;
 import com.laststar.game.core.Noise;
 import com.laststar.game.gl.SceneRenderer;
 import com.laststar.game.ui.Hud;
+import com.laststar.game.ui.Menu;
 import com.laststar.game.ui.TouchControls;
 import com.laststar.game.ui.UiBatch;
 import com.laststar.game.ui.UiRenderer;
@@ -37,6 +38,9 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
     private final SceneRenderer renderer = new SceneRenderer();
     private final Hud hud;
     private final Prefs prefs;
+    private final Menu menu = new Menu();
+    /** True while the out-of-game menus are showing. */
+    private boolean inMenu = true;
 
     private UiRenderer uiRenderer;
     private boolean ready;
@@ -63,6 +67,7 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
         hud = new Hud(new com.laststar.game.ui.Font());
         hud.soundOn = !prefs.isMuted();
         controls.setLeftHanded(prefs.isLeftHanded());
+        menu.load(prefs);
         wireEvents();
     }
 
@@ -129,6 +134,12 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
             if (world.phase == World.Phase.VICTORY) {
                 world.phase = World.Phase.COMPLETE;
             }
+            // The pause button opens the menus on the settings page.
+            menu.load(prefs);
+            menu.page = Menu.Page.SETTINGS;
+            inMenu = true;
+            prefs.recordRun(world.shardsCollected, world.kills,
+                    world.phase == World.Phase.COMPLETE);
             sound.play(SoundFx.Id.UI_TAP);
         }
 
@@ -168,13 +179,33 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
         renderer.prepareFrame(world, camera, aspect);
         renderer.draw(world, camera, aspect, dt, nightAmount);
 
-        hud.update(dt);
         float uiScale = TouchControls.scaleFor(screenW, screenH);
         float vw = screenW * uiScale;
         float vh = screenH * uiScale;
-        uiBatch.begin(Math.round(vw), Math.round(vh));
-        hud.draw(uiBatch, world, controls, debugOverlay);
-        uiRenderer.draw(uiBatch, screenW, screenH);
+        UiBatch batch = uiBatch;
+        batch.begin(Math.round(vw), Math.round(vh));
+
+        if (inMenu) {
+            menu.update(dt);
+            menu.draw(batch, uiRenderer.font());
+            if (menu.startRequested) {
+                menu.startRequested = false;
+                inMenu = false;
+                world.difficulty = menu.settings.difficulty;
+                world.player.skinTone = menu.wardrobe.selectedSwatch;
+                world.beginRun();
+                world.player.skinTone = menu.wardrobe.selectedSwatch;
+                camera.snapBehind(world);
+                nightAmount = 0f;
+                sound.play(SoundFx.Id.UI_TAP);
+            }
+            uiRenderer.draw(batch, screenW, screenH);
+            return;
+        }
+
+        hud.update(dt);
+        hud.draw(batch, world, controls, debugOverlay);
+        uiRenderer.draw(batch, screenW, screenH);
     }
 
     private void stepSimulation(float dt) {
@@ -218,6 +249,31 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         float scale = TouchControls.scaleFor(screenW, screenH);
+        if (inMenu) {
+            float vx = event.getX() / scale;
+            float vy = event.getY() / scale;
+            float vw = screenW / scale;
+            float vh = screenH / scale;
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                menu.tap(vx, vy, vw, vh);
+            } else if (event.getActionMasked() == MotionEvent.ACTION_UP
+                    || event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+                menu.release();
+                prefs.setMuted(!menu.settings.audio);
+                prefs.setVolume(menu.settings.masterVolume);
+                prefs.setHaptics(menu.settings.haptics);
+                prefs.setCameraShake(menu.settings.cameraShake);
+                prefs.setDifficulty(menu.settings.difficulty);
+                prefs.setSkinTone(menu.wardrobe.selectedSwatch);
+                prefs.setBody(menu.wardrobe.selectedBody);
+                prefs.setPlayerName(menu.home.playerName());
+                world.player.skinTone = menu.wardrobe.selectedSwatch;
+                sound.setEnabled(menu.settings.audio);
+                hud.soundOn = menu.settings.audio;
+                sound.setVolume(menu.settings.masterVolume);
+            }
+            return true;
+        }
         if (world.phase == World.Phase.COMPLETE) {
             if (event.getActionMasked() == MotionEvent.ACTION_UP) {
                 prefs.recordRun(world.shardsCollected, world.kills, true);

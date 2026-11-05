@@ -38,7 +38,8 @@ echo "==> compiling simulation + harness"
 "$JAVA_BIN" -jar "$ECJ_JAR" -source 1.8 -target 1.8 -nowarn \
   -classpath "$ANDROID_JAR" -d "$OUT" \
   @"$ROOT/build/test-sources.txt" \
-  desktop/HeadlessTest.java desktop/PngWriter.java desktop/Raster.java desktop/ScreenshotTool.java
+  desktop/HeadlessTest.java desktop/PngWriter.java desktop/Raster.java \
+  desktop/ScreenshotTool.java desktop/MenuPreview.java
 
 echo "==> running headless verification"
 "$JAVA_BIN" -cp "$OUT" HeadlessTest
@@ -47,4 +48,7 @@ if [[ "${1:-}" != "--tests" ]]; then
   echo
   echo "==> rendering screenshots from the real game code"
   "$JAVA_BIN" -cp "$OUT" ScreenshotTool docs/screenshots 960 540
+  echo
+  echo "==> rendering the menu screens"
+  "$JAVA_BIN" -cp "$OUT" MenuPreview docs/ui/screens 1280 720
 fi

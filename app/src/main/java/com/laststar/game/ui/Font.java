@@ -7,7 +7,7 @@ package com.laststar.game.ui;
  * dependency free and means text is always crisp: it is drawn as quads sampled
  * with nearest-neighbour filtering at integer scales.</p>
  */
-public final class Font {
+public final class Font extends AtlasFont {
 
     public static final int GLYPH_W = 5;
     public static final int GLYPH_H = 7;
@@ -126,10 +126,6 @@ public final class Font {
             "01000,00100,00010,00001,00010,00100,01000",
     };
 
-    /** Monochrome atlas, one byte per pixel, row-major, width = 8 glyph cells. */
-    public final byte[] atlas;
-    public final int atlasWidth;
-    public final int atlasHeight;
     private final int cols = 8;
     private final int rows;
 
@@ -162,7 +158,23 @@ public final class Font {
         return idx;
     }
 
+    @Override
+    public int glyphWidth() {
+        return GLYPH_W;
+    }
+
+    @Override
+    public int glyphHeight() {
+        return GLYPH_H;
+    }
+
+    @Override
+    public int advance() {
+        return ADVANCE;
+    }
+
     /** Atlas UV rect for a glyph: {u0, v0, du, dv}. */
+    @Override
     public float[] uv(char c) {
         int g = indexOf(c);
         float u0 = (float) ((g % cols) * (GLYPH_W + 1)) / atlasWidth;
@@ -170,7 +182,8 @@ public final class Font {
         return new float[]{u0, v0, (float) GLYPH_W / atlasWidth, (float) GLYPH_H / atlasHeight};
     }
 
-    public static int textWidth(String s, int scale) {
+    /** Static convenience used by the HUD; the instance form lives on AtlasFont. */
+    public static int glyphWidth(String s, int scale) {
         return s.length() * ADVANCE * scale;
     }
 

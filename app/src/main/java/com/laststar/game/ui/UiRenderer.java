@@ -37,8 +37,16 @@ public final class UiRenderer {
                     + "varying vec2 vUv;\n"
                     + "varying vec4 vColor;\n"
                     + "uniform sampler2D uTex;\n"
+                    + "uniform float uDf;\n"
+                    + "uniform float uSmooth;\n"
                     + "void main() {\n"
-                    + "  float coverage = texture2D(uTex, vUv).r;\n"
+                    + "  vec4 texel = texture2D(uTex, vUv);\n"
+                    + "  float coverage = texel.a;\n"
+                    + "  if (uDf > 0.5) {\n"
+                    + "    float d = texel.a;\n"
+                    + "    float width = max(fwidth(d), 0.0015) * uSmooth;\n"
+                    + "    coverage = smoothstep(0.5 - width, 0.5 + width, d);\n"
+                    + "  }\n"
                     + "  if (vColor.a < 0.004) discard;\n"
                     + "  gl_FragColor = vec4(vColor.rgb, vColor.a * coverage);\n"
                     + "}\n";
@@ -50,12 +58,14 @@ public final class UiRenderer {
     private final int[] vbo = new int[1];
     private boolean useVbo = true;
 
-    private final Font font = new Font();
+    private final AtlasFont font = new VectorFont();
     private int aPos = -1;
     private int aUv = -1;
     private int aColor = -1;
     private int uInvSize = -1;
     private int uTex = -1;
+    private int uDf = -1;
+    private int uSmooth = -1;
 
     public void init() {
         program = GlProgram.create(VERT, FRAG);
@@ -64,13 +74,16 @@ public final class UiRenderer {
         aColor = GLES20.glGetAttribLocation(program.id, "aColor");
         uInvSize = GLES20.glGetUniformLocation(program.id, "uInvSize");
         uTex = GLES20.glGetUniformLocation(program.id, "uTex");
+        uDf = GLES20.glGetUniformLocation(program.id, "uDf");
+        uSmooth = GLES20.glGetUniformLocation(program.id, "uSmooth");
 
         int[] tex = new int[1];
         GLES20.glGenTextures(1, tex, 0);
         texture = tex[0];
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture);
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+        int filter = font.smooth() ? GLES20.GL_LINEAR : GLES20.GL_NEAREST;
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, filter);
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, filter);
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
 
@@ -83,16 +96,16 @@ public final class UiRenderer {
         float whiteV;
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                float coverage = 0f;
+                int value = 0;
                 if (y < font.atlasHeight) {
-                    coverage = (font.atlas[y * w + x] & 0xFF) / 255f;
+                    value = font.atlas[y * w + x] & 0xFF;
                 } else {
-                    coverage = 1f;
+                    value = 255;
                 }
+                pixels.put((byte) value);
                 pixels.put((byte) 255);
                 pixels.put((byte) 255);
-                pixels.put((byte) 255);
-                pixels.put((byte) (int) (coverage * 255f));
+                pixels.put((byte) value);
             }
         }
         pixels.position(0);
@@ -147,6 +160,8 @@ public final class UiRenderer {
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture);
         GLES20.glUniform1i(uTex, 0);
+        GLES20.glUniform1f(uDf, font.coverageAtlas() ? 0f : 1f);
+        GLES20.glUniform1f(uSmooth, 1f);
         GLES20.glUniform2f(uInvSize, 1f / batch.virtualWidth, 1f / batch.virtualHeight);
 
         ByteBuffer bb = ByteBuffer.allocateDirect(needed * 4).order(ByteOrder.nativeOrder());
@@ -174,7 +189,7 @@ public final class UiRenderer {
         GLES20.glEnable(GLES20.GL_DEPTH_TEST);
     }
 
-    public Font font() {
+    public AtlasFont font() {
         return font;
     }
 

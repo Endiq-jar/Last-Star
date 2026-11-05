@@ -13,13 +13,13 @@ import com.laststar.game.world.World;
  */
 public final class Hud {
 
-    private final Font font;
+    private final AtlasFont font;
     /** Reflects the audio preference so the icon can show a slash. */
     public boolean soundOn = true;
     private float time;
     private float fps;
 
-    public Hud(Font font) {
+    public Hud(AtlasFont font) {
         this.font = font;
     }
 
@@ -220,7 +220,7 @@ public final class Hud {
         }
         float fade = Noise.clamp01(world.messageTimer / 0.6f);
         float y = b.virtualHeight * 0.24f;
-        float width = Font.textWidth(world.message, 2) + 26f;
+        float width = font.textWidth(world.message, 2) + 26f;
         b.quad(b.virtualWidth * 0.5f - width * 0.5f, y - 8f, width, 32f,
                 0f, 0f, 0f, 0.38f * fade);
         b.textCentred(world.message, b.virtualWidth * 0.5f, y, 2, 1f, 0.97f, 0.9f, fade, font);

@@ -355,24 +355,59 @@ public final class Raster {
     public void fillTexturedQuad2D(float x0, float y0, float x1, float y1, float u0, float v0,
                                    float u1, float v1, byte[] atlas, int atlasW, int atlasH,
                                    int col, float alpha) {
+        fillTexturedQuad2D(x0, y0, x1, y1, u0, v0, u1, v1, atlas, atlasW, atlasH,
+                col, alpha, false);
+    }
+
+    /**
+     * Textured blit. When {@code distanceField} is true the atlas holds signed
+     * distances (128 = edge) and the quad is supersampled so the emulated
+     * hardware filtering produces a smooth outline instead of a hard staircase.
+     */
+    public void fillTexturedQuad2D(float x0, float y0, float x1, float y1, float u0, float v0,
+                                   float u1, float v1, byte[] atlas, int atlasW, int atlasH,
+                                   int col, float alpha, boolean distanceField) {
         int minX = (int) Math.max(0, Math.floor(Math.min(x0, x1)));
         int maxX = (int) Math.min(width - 1, Math.ceil(Math.max(x0, x1)));
         int minY = (int) Math.max(0, Math.floor(Math.min(y0, y1)));
         int maxY = (int) Math.min(height - 1, Math.ceil(Math.max(y0, y1)));
+        float w = Math.abs(x1 - x0);
+        float h = Math.abs(y1 - y0);
+        int ss = distanceField ? 4 : 1;
+        float step = 1f / ss;
+        float norm = 1f / (ss * ss);
+        // Equivalent of GL's fwidth-based smoothstep: half a texel of blur.
+        float texel = h / Math.max(1f, 34f);
+        float halfWidth = distanceField ? Math.max(0.012f, texel * 0.5f) : 0f;
         for (int y = minY; y <= maxY; y++) {
-            float ty = (y + 0.5f - y0) / (y1 - y0 + 1e-6f);
             for (int x = minX; x <= maxX; x++) {
-                float tx = (x + 0.5f - x0) / (x1 - x0 + 1e-6f);
-                int ax = (int) ((u0 + (u1 - u0) * tx) * atlasW);
-                int ay = (int) ((v0 + (v1 - v0) * ty) * atlasH);
-                if (ax < 0 || ay < 0 || ax >= atlasW || ay >= atlasH) {
+                float acc = 0f;
+                for (int syi = 0; syi < ss; syi++) {
+                    for (int sxi = 0; sxi < ss; sxi++) {
+                        float ty = (y + (syi + 0.5f) * step - y0) / (y1 - y0 + 1e-6f);
+                        float tx = (x + (sxi + 0.5f) * step - x0) / (x1 - x0 + 1e-6f);
+                        if (tx < 0f || tx > 1f || ty < 0f || ty > 1f) {
+                            continue;
+                        }
+                        int ax = (int) ((u0 + (u1 - u0) * tx) * atlasW);
+                        int ay = (int) ((v0 + (v1 - v0) * ty) * atlasH);
+                        if (ax < 0 || ay < 0 || ax >= atlasW || ay >= atlasH) {
+                            continue;
+                        }
+                        float sample = (atlas[ay * atlasW + ax] & 0xFF) / 255f;
+                        if (distanceField) {
+                            float t = (sample - 0.5f + halfWidth) / (2f * halfWidth);
+                            acc += t <= 0f ? 0f : (t >= 1f ? 1f : t * t * (3f - 2f * t));
+                        } else {
+                            acc += sample > 0.5f ? 1f : sample * 2f;
+                        }
+                    }
+                }
+                acc *= norm;
+                if (acc <= 0.004f) {
                     continue;
                 }
-                int coverage = atlas[ay * atlasW + ax] & 0xFF;
-                if (coverage == 0) {
-                    continue;
-                }
-                blend(y * width + x, col, alpha * coverage / 255f);
+                blend(y * width + x, col, alpha * Math.min(1f, acc));
             }
         }
     }

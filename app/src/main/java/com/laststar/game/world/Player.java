@@ -23,6 +23,28 @@ public final class Player extends Entity {
     public float animPhase;
     public float invulnerability;
     public float breathe;
+    /** Cosmetics chosen in the wardrobe: an offset into the palette below. */
+    public int skinTone = 3;
+    /** Robe tint, mirrored from the wardrobe's hair/cosmetic swatches. */
+    public float[] robeColour = {0.16f, 0.44f, 0.47f};
+
+    /** Skin palette shared with the wardrobe screen. */
+    private static final float[][] SKIN = {
+            {0.949f, 0.898f, 0.831f}, {0.953f, 0.851f, 0.776f}, {0.937f, 0.784f, 0.667f},
+            {0.910f, 0.729f, 0.573f},
+            {0.749f, 0.545f, 0.373f}, {0.667f, 0.443f, 0.290f}, {0.596f, 0.365f, 0.235f},
+            {0.541f, 0.318f, 0.180f},
+            {0.478f, 0.239f, 0.157f}, {0.400f, 0.196f, 0.145f}, {0.298f, 0.169f, 0.129f},
+            {0.227f, 0.137f, 0.106f},
+            {0.235f, 0.180f, 0.145f}, {0.435f, 0.835f, 0.784f}, {0.180f, 0.639f, 0.667f},
+            {0.353f, 0.545f, 0.851f}
+    };
+
+    /** The selected skin colour as {r, g, b}, clamped to the palette. */
+    public float[] skinColour() {
+        int i = skinTone < 0 ? 0 : (skinTone >= SKIN.length ? SKIN.length - 1 : skinTone);
+        return SKIN[i];
+    }
 
     public Player(Vec3 position) {
         super(position);
