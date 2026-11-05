@@ -1,0 +1,343 @@
+package com.laststar.game.gl;
+
+import com.laststar.game.core.Noise;
+import com.laststar.game.core.Terrain;
+import com.laststar.game.core.Vec3;
+
+/**
+ * Procedural geometry generators. Everything the game draws is produced here at
+ * startup, which keeps the APK small and avoids asset pipelines.
+ *
+ * <p>No Android imports: these run in unit tests too.</p>
+ */
+public final class Geometry {
+
+    private Geometry() {
+    }
+
+    // ---------------------------------------------------------------- terrain
+
+    /**
+     * Builds the terrain mesh with baked vertex colours: grass on gentle slopes,
+     * rock on steep ones, sand near the water line and snow on peaks.
+     */
+    public static MeshData terrain(Terrain t) {
+        int n = t.segments + 1;
+        float half = t.size * 0.5f;
+        float cell = t.size / t.segments;
+
+        MeshData.Builder b = new MeshData.Builder();
+        for (int gz = 0; gz < n; gz++) {
+            for (int gx = 0; gx < n; gx++) {
+                float x = gx * cell - half;
+                float z = gz * cell - half;
+                float y = t.getHeight(gx, gz);
+                Vec3 normal = t.normalAt(x, z);
+
+                float slope = 1f - Noise.clamp01(normal.y);
+                float blend = (float) (t.blend[gz * n + gx] & 0xFF) / 127f;
+
+                // Grass, rock, sand and snow blended by slope/height with a
+                // little noise so the ground never reads as one flat colour.
+                float patch = Noise.clamp01(0.5f + 0.5f * fastNoise(x * 0.045f, z * 0.045f));
+
+                float gr = 0.26f + 0.16f * blend + 0.06f * patch;
+                float gg = 0.50f + 0.20f * blend + 0.05f * patch;
+                float gb = 0.20f + 0.11f * blend;
+
+                // Dry/dirt patches.
+                float dirtT = Noise.smoothstep(0.62f, 0.92f, patch) * 0.75f;
+                gr = lerp(gr, 0.47f, dirtT);
+                gg = lerp(gg, 0.38f, dirtT);
+                gb = lerp(gb, 0.24f, dirtT);
+
+                // Rock on steep faces.
+                float rockT = Noise.smoothstep(0.26f, 0.55f, slope);
+                gr = lerp(gr, 0.50f, rockT);
+                gg = lerp(gg, 0.50f, rockT);
+                gb = lerp(gb, 0.52f, rockT);
+
+                // Sand around the waterline.
+                float sandT = Noise.smoothstep(t.waterLevel + 1.1f, t.waterLevel + 0.2f, y);
+                gr = lerp(gr, 0.80f, sandT);
+                gg = lerp(gg, 0.72f, sandT);
+                gb = lerp(gb, 0.48f, sandT);
+
+                // Snow on high ridges.
+                float snowT = Noise.smoothstep(12f, 18f, y);
+                gr = lerp(gr, 0.95f, snowT);
+                gg = lerp(gg, 0.97f, snowT);
+                gb = lerp(gb, 1.00f, snowT);
+
+                // Gentle ambient occlusion in the valleys.
+                float ao = Noise.clamp01(0.80f + 0.28f * Noise.smoothstep(-2f, 7f, y));
+                gr *= ao;
+                gg *= ao;
+                gb *= ao;
+
+                b.addVertex(x, y, z, normal.x, normal.y, normal.z, gr, gg, gb, 1f, 0f);
+            }
+        }
+
+        for (int gz = 0; gz < t.segments; gz++) {
+            for (int gx = 0; gx < t.segments; gx++) {
+                int i0 = gz * n + gx;
+                int i1 = i0 + 1;
+                int i2 = i0 + n;
+                int i3 = i2 + 1;
+                b.addTriangle(i0, i2, i1);
+                b.addTriangle(i1, i2, i3);
+            }
+        }
+        return b.build();
+    }
+
+    // ----------------------------------------------------------------- water
+
+    /** Flat plane subdivided so the vertex shader can ripple it. */
+    public static MeshData waterPlane(float size, int segments, float level) {
+        MeshData.Builder b = new MeshData.Builder();
+        float half = size * 0.5f;
+        float cell = size / segments;
+        int n = segments + 1;
+        for (int gz = 0; gz < n; gz++) {
+            for (int gx = 0; gx < n; gx++) {
+                float x = gx * cell - half;
+                float z = gz * cell - half;
+                float distToCentre = (float) Math.sqrt(x * x + z * z);
+                float wave = distToCentre * 0.35f;
+                b.addVertex(x, level, z, 0f, 1f, 0f, 0.22f, 0.52f, 0.72f, 0.74f, wave);
+            }
+        }
+        for (int gz = 0; gz < segments; gz++) {
+            for (int gx = 0; gx < segments; gx++) {
+                int i0 = gz * n + gx;
+                int i1 = i0 + 1;
+                int i2 = i0 + n;
+                int i3 = i2 + 1;
+                b.addQuad(i0, i1, i3, i2);
+            }
+        }
+        return b.build();
+    }
+
+    // ---------------------------------------------------------------- shapes
+
+    /** Axis-aligned box centred at the origin (optionally offset). */
+    public static MeshData box(float sx, float sy, float sz,
+                               float r, float g, float b, float a,
+                               float ox, float oy, float oz) {
+        MeshData.Builder mb = new MeshData.Builder();
+        float hx = sx * 0.5f, hy = sy * 0.5f, hz = sz * 0.5f;
+        addBoxFace(mb, new Vec3(1, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, 1), hx, hy, hz, r, g, b, a, ox, oy, oz);
+        addBoxFace(mb, new Vec3(-1, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, -1), hx, hy, hz, r, g, b, a, ox, oy, oz);
+        addBoxFace(mb, new Vec3(0, 1, 0), new Vec3(0, 0, 1), new Vec3(1, 0, 0), hx, hy, hz, r, g, b, a, ox, oy, oz);
+        addBoxFace(mb, new Vec3(0, -1, 0), new Vec3(0, 0, -1), new Vec3(1, 0, 0), hx, hy, hz, r, g, b, a, ox, oy, oz);
+        addBoxFace(mb, new Vec3(0, 0, 1), new Vec3(0, 1, 0), new Vec3(-1, 0, 0), hx, hy, hz, r, g, b, a, ox, oy, oz);
+        addBoxFace(mb, new Vec3(0, 0, -1), new Vec3(0, 1, 0), new Vec3(1, 0, 0), hx, hy, hz, r, g, b, a, ox, oy, oz);
+        return mb.build();
+    }
+
+    private static void addBoxFace(MeshData.Builder b, Vec3 n, Vec3 up, Vec3 right,
+                                   float hx, float hy, float hz,
+                                   float r, float g, float bl, float a,
+                                   float ox, float oy, float oz) {
+        float ex = Math.abs(right.x) * hx + Math.abs(up.x) * hy + Math.abs(n.x) * hz;
+        float ey = Math.abs(right.y) * hx + Math.abs(up.y) * hy + Math.abs(n.y) * hz;
+        float ez = Math.abs(right.z) * hx + Math.abs(up.z) * hy + Math.abs(n.z) * hz;
+        Vec3 c = new Vec3(n.x * ex + ox, n.y * ey + oy, n.z * ez + oz);
+        Vec3 ru = right.mul(Math.abs(right.x) > 0.5f ? hx : (Math.abs(right.y) > 0.5f ? hy : hz));
+        Vec3 uu = up.mul(Math.abs(up.x) > 0.5f ? hx : (Math.abs(up.y) > 0.5f ? hy : hz));
+        Vec3 p0 = c.sub(ru).sub(uu);
+        Vec3 p1 = c.add(ru).sub(uu);
+        Vec3 p2 = c.add(ru).add(uu);
+        Vec3 p3 = c.sub(ru).add(uu);
+        int i0 = b.addVertex(p0, n, r, g, bl, a, 0f);
+        int i1 = b.addVertex(p1, n, r * 0.94f, g * 0.94f, bl * 0.94f, a, 0f);
+        int i2 = b.addVertex(p2, n, r, g, bl, a, 0f);
+        int i3 = b.addVertex(p3, n, r * 0.9f, g * 0.9f, bl * 0.9f, a, 0f);
+        b.addQuad(i0, i1, i2, i3);
+    }
+
+    /** Vertical cylinder / tapered frustum with caps, base at y = 0. */
+    public static MeshData cylinder(float bottomRadius, float topRadius, float height,
+                                    int segments, float r, float g, float b, float a) {
+        MeshData.Builder mb = new MeshData.Builder();
+        for (int s = 0; s < segments; s++) {
+            float t0 = (float) (s * 2.0 * Math.PI / segments);
+            float t1 = (float) ((s + 1) * 2.0 * Math.PI / segments);
+            Vec3 d0 = new Vec3((float) Math.cos(t0), 0f, (float) Math.sin(t0));
+            Vec3 d1 = new Vec3((float) Math.cos(t1), 0f, (float) Math.sin(t1));
+            Vec3 p00 = d0.mul(bottomRadius);
+            Vec3 p01 = d1.mul(bottomRadius);
+            Vec3 p10 = d0.mul(topRadius).withY(height);
+            Vec3 p11 = d1.mul(topRadius).withY(height);
+            Vec3 n0 = new Vec3(d0.x, 0f, d0.z);
+            Vec3 n1 = new Vec3(d1.x, 0f, d1.z);
+            int i0 = mb.addVertex(p00, n0, r * 0.85f, g * 0.85f, b * 0.85f, a, 0f);
+            int i1 = mb.addVertex(p01, n1, r * 0.85f, g * 0.85f, b * 0.85f, a, 0f);
+            int i2 = mb.addVertex(p11, n1, r, g, b, a, 0f);
+            int i3 = mb.addVertex(p10, n0, r, g, b, a, 0f);
+            mb.addQuad(i0, i1, i2, i3);
+        }
+        // Top cap.
+        if (topRadius > 0.001f) {
+            int centre = mb.addVertex(new Vec3(0f, height, 0f), Vec3.UP, r, g, b, a, 0f);
+            int first = mb.vertexCount();
+            for (int s = 0; s < segments; s++) {
+                float t = (float) (s * 2.0 * Math.PI / segments);
+                Vec3 p = new Vec3((float) Math.cos(t) * topRadius, height, (float) Math.sin(t) * topRadius);
+                mb.addVertex(p, Vec3.UP, r, g, b, a, 0f);
+            }
+            for (int s = 0; s < segments; s++) {
+                mb.addTriangle(centre, first + s, first + (s + 1) % segments);
+            }
+        }
+        return mb.build();
+    }
+
+    /** Lat/long UV sphere. */
+    public static MeshData sphere(float radius, int lat, int lon,
+                                  float r, float g, float b, float a) {
+        MeshData.Builder mb = new MeshData.Builder();
+        for (int iy = 0; iy <= lat; iy++) {
+            float v = (float) iy / lat;
+            float phi = v * (float) Math.PI;
+            float y = (float) Math.cos(phi);
+            float sinPhi = (float) Math.sin(phi);
+            for (int ix = 0; ix <= lon; ix++) {
+                float u = (float) ix / lon;
+                float theta = u * (float) (Math.PI * 2.0);
+                Vec3 n = new Vec3(sinPhi * (float) Math.cos(theta), y, sinPhi * (float) Math.sin(theta));
+                Vec3 p = n.mul(radius);
+                mb.addVertex(p, n, r, g, b, a, 0f);
+            }
+        }
+        int row = lon + 1;
+        for (int iy = 0; iy < lat; iy++) {
+            for (int ix = 0; ix < lon; ix++) {
+                int a0 = iy * row + ix;
+                int a1 = a0 + 1;
+                int b0 = a0 + row;
+                int b1 = b0 + 1;
+                mb.addTriangle(a0, b0, a1);
+                mb.addTriangle(a1, b0, b1);
+            }
+        }
+        return mb.build();
+    }
+
+    /** Low-poly octahedron used for the star shards. */
+    public static MeshData octahedron(float radius, float r0, float g0, float b0) {
+        MeshData.Builder mb = new MeshData.Builder();
+        Vec3[] dirs = {
+                new Vec3(0, 1, 0), new Vec3(0, -1, 0),
+                new Vec3(1, 0, 0), new Vec3(-1, 0, 0),
+                new Vec3(0, 0, 1), new Vec3(0, 0, -1)
+        };
+        int[][] tris = {
+                {0, 2, 4}, {0, 4, 3}, {0, 3, 5}, {0, 5, 2},
+                {1, 4, 2}, {1, 3, 4}, {1, 5, 3}, {1, 2, 5}
+        };
+        for (int[] t : tris) {
+            Vec3 a = dirs[t[0]].mul(radius);
+            Vec3 bb = dirs[t[1]].mul(radius);
+            Vec3 c = dirs[t[2]].mul(radius);
+            Vec3 n = bb.sub(a).cross(c.sub(a)).normalized();
+            int i0 = mb.addVertex(a, n, r0, g0, b0, 1f, 0f);
+            int i1 = mb.addVertex(bb, n, r0, g0, b0, 1f, 0f);
+            int i2 = mb.addVertex(c, n, r0, g0, b0, 1f, 0f);
+            mb.addTriangle(i0, i1, i2);
+        }
+        return mb.build();
+    }
+
+    /** A 6-pointed spike star, the game's logo shape, used for icons and HUD. */
+    public static MeshData starShard(float radius, float r, float g, float b) {
+        MeshData.Builder mb = new MeshData.Builder();
+        int points = 5;
+        Vec3 top = new Vec3(0f, radius * 1.35f, 0f);
+        Vec3 bottom = new Vec3(0f, -radius * 1.35f, 0f);
+        for (int i = 0; i < points * 2; i++) {
+            float a0 = (float) (i * Math.PI * 2.0 / (points * 2));
+            float a1 = (float) ((i + 1) * Math.PI * 2.0 / (points * 2));
+            float rad0 = (i % 2 == 0) ? radius : radius * 0.42f;
+            float rad1 = (i % 2 == 0) ? radius * 0.42f : radius;
+            Vec3 p0 = new Vec3((float) Math.cos(a0) * rad0, 0f, (float) Math.sin(a0) * rad0);
+            Vec3 p1 = new Vec3((float) Math.cos(a1) * rad1, 0f, (float) Math.sin(a1) * rad1);
+            Vec3 n0 = new Vec3(p0.x, 0.6f, p0.z).normalized();
+            int i0 = mb.addVertex(top, Vec3.UP, r, g, b, 1f, 0f);
+            int i1 = mb.addVertex(p0, n0, r, g, b, 1f, 0f);
+            int i2 = mb.addVertex(p1, n0, r, g, b, 1f, 0f);
+            mb.addTriangle(i0, i1, i2);
+            int j0 = mb.addVertex(bottom, new Vec3(0f, -1f, 0f), r * 0.8f, g * 0.8f, b * 0.8f, 1f, 0f);
+            int j1 = mb.addVertex(p1, n0, r * 0.8f, g * 0.8f, b * 0.8f, 1f, 0f);
+            int j2 = mb.addVertex(p0, n0, r * 0.8f, g * 0.8f, b * 0.8f, 1f, 0f);
+            mb.addTriangle(j0, j1, j2);
+        }
+        return mb.build();
+    }
+
+    /** Camera-facing quad for particles and billboards, centred on the origin. */
+    public static MeshData quad(float size, float r, float g, float b, float a) {
+        MeshData.Builder mb = new MeshData.Builder();
+        float h = size * 0.5f;
+        Vec3 n = new Vec3(0f, 0f, 1f);
+        int i0 = mb.addVertex(new Vec3(-h, -h, 0f), n, r, g, b, a, 0f);
+        int i1 = mb.addVertex(new Vec3(h, -h, 0f), n, r, g, b, a, 0f);
+        int i2 = mb.addVertex(new Vec3(h, h, 0f), n, r, g, b, a, 0f);
+        int i3 = mb.addVertex(new Vec3(-h, h, 0f), n, r, g, b, a, 0f);
+        mb.addQuad(i0, i1, i2, i3);
+        return mb.build();
+    }
+
+    /** Ground ring used as the melee impact decal and shard highlight. */
+    public static MeshData groundRing(float radius, float thickness, int segments,
+                                      float r, float g, float b, float a) {
+        MeshData.Builder mb = new MeshData.Builder();
+        for (int s = 0; s < segments; s++) {
+            float t0 = (float) (s * 2.0 * Math.PI / segments);
+            float t1 = (float) ((s + 1) * 2.0 * Math.PI / segments);
+            Vec3 d0 = new Vec3((float) Math.cos(t0), 0f, (float) Math.sin(t0));
+            Vec3 d1 = new Vec3((float) Math.cos(t1), 0f, (float) Math.sin(t1));
+            int i0 = mb.addVertex(d0.mul(radius - thickness), Vec3.UP, r, g, b, a, 0f);
+            int i1 = mb.addVertex(d1.mul(radius - thickness), Vec3.UP, r, g, b, a, 0f);
+            int i2 = mb.addVertex(d1.mul(radius), Vec3.UP, r, g, b, a, 0f);
+            int i3 = mb.addVertex(d0.mul(radius), Vec3.UP, r, g, b, a, 0f);
+            mb.addQuad(i0, i1, i2, i3);
+        }
+        return mb.build();
+    }
+
+    /** Cone (base at y = 0). */
+    public static MeshData cone(float radius, float height, int segments,
+                                float r, float g, float b, float a) {
+        MeshData.Builder mb = new MeshData.Builder();
+        Vec3 apex = new Vec3(0f, height, 0f);
+        for (int s = 0; s < segments; s++) {
+            float t0 = (float) (s * 2.0 * Math.PI / segments);
+            float t1 = (float) ((s + 1) * 2.0 * Math.PI / segments);
+            Vec3 p0 = new Vec3((float) Math.cos(t0) * radius, 0f, (float) Math.sin(t0) * radius);
+            Vec3 p1 = new Vec3((float) Math.cos(t1) * radius, 0f, (float) Math.sin(t1) * radius);
+            Vec3 n = p1.sub(p0).cross(apex.sub(p0)).normalized();
+            int i0 = mb.addVertex(apex, n, r, g, b, a, 0f);
+            int i1 = mb.addVertex(p0, n, r * 0.8f, g * 0.8f, b * 0.8f, a, 0f);
+            int i2 = mb.addVertex(p1, n, r * 0.8f, g * 0.8f, b * 0.8f, a, 0f);
+            mb.addTriangle(i0, i1, i2);
+        }
+        return mb.build();
+    }
+
+    private static float lerp(float a, float b, float t) {
+        return a + (b - a) * t;
+    }
+
+    /** Cheap deterministic hash-noise used to break up flat surfaces. */
+    private static float fastNoise(float x, float y) {
+        float v = (float) Math.sin(x * 127.1f + y * 311.7f) * 43758.5453f;
+        v = v - (float) Math.floor(v);
+        float w = (float) Math.sin(x * 269.5f - y * 183.3f) * 24634.6345f;
+        w = w - (float) Math.floor(w);
+        return v * 0.6f + w * 0.4f;
+    }
+}

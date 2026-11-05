@@ -1,0 +1,26 @@
+# ---------------------------------------------------------------- build output
+/build/
+*.class
+*.dex
+*.apk.idsig
+
+# --------------------------------------------------------------- editor noise
+.idea/
+.vscode/
+*.iml
+*.userprefs
+
+# -------------------------------------------------------- platform local files
+.DS_Store
+Thumbs.db
+local.properties
+
+# Unity (upstream copies keep their own .gitignore as well)
+Library/
+Temp/
+Obj/
+Logs/
+UserSettings/
+
+# apksigner detached v4 signature sidecar
+*.idsig
