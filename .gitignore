@@ -24,3 +24,6 @@ UserSettings/
 
 # apksigner detached v4 signature sidecar
 *.idsig
+
+# toolchain fetched by tools/fetch_toolchain.sh (large, machine specific)
+tools/.toolchain/

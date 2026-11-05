@@ -15,14 +15,20 @@ repository**, no Unity, no Gradle, no Android Studio required.
 
 ## Install and play (2 minutes)
 
-1. Copy **`apk/last-star-1.0.0.apk`** to your phone (USB, Google Drive, or
-   download it straight from this repository on the phone).
+**Download:** [**last-star-1.0.0.apk**](https://github.com/Endiq-jar/Last-Star/raw/arena/b1ab2e08-last-star/apk/last-star-1.0.0.apk)
+· in the repo: [`apk/last-star-1.0.0.apk`](apk/last-star-1.0.0.apk)
+· release notes: [v1.0.0](https://github.com/Endiq-jar/Last-Star/releases/tag/v1.0.0)
+
+1. Get **`apk/last-star-1.0.0.apk`** onto your phone (open the link above on the
+   phone, or copy the file over USB / Google Drive).
 2. Open it. Android will warn that the app is from an unknown source:
    tap **Settings → Allow from this source**, then **Install**.
 3. Launch **Last Star**. Hold the phone in landscape.
 
 Works on **every Android device since Android 5.0 (API 21)** — 32-bit, 64-bit,
-ARM and x86. No internet permission, no ads, no analytics, ~250 KiB.
+ARM and x86. No permissions at all: no internet, no ads, no analytics, ~250 KiB.
+Signed with APK schemes v1 + v2 + v3
+(SHA-256 `c92377be7b06c8c49d07498247d14924e38f7bd49d339981beff924a0817b74b`).
 
 ### Controls
 
