@@ -35,6 +35,17 @@ the game instead of fighting it:
   never by height — a flat rock and a tall tree then sit at the right relative
   size on the terrain.
 
+## Mountains
+
+The distant snow-capped range on the horizon is **not** an imported asset — no
+CC0 mountain kit was available from a reachable source (Kenney publishes no
+mountain kit, and the linked Unity Asset Store / Holotna packs are both licence
+gated and unreachable from the build environment). It is generated in
+`Geometry.mountainRange`: 56 low-poly peaks with jittered rims, an asymmetric
+apex and a painted snow band, a separate ring that follows the camera so the
+skyline reads from anywhere on the map. The foothills inside the map are part of
+the procedural terrain.
+
 ## Everything else
 
 The engine (`app/src/main/java`), the headless test harness and software
