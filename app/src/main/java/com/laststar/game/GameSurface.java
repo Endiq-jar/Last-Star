@@ -28,6 +28,8 @@ import javax.microedition.khronos.opengles.GL10;
 public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     private static final float FIXED_STEP = 1f / 60f;
+    private static final int GLES20_RENDERER = 0x1F01;
+    private static final int GLES20_VERSION = 0x1F02;
 
     private final World world;
     private final Camera camera = new Camera();
@@ -44,6 +46,10 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
 
     private UiRenderer uiRenderer;
     private boolean ready;
+    private boolean worldReady;
+    private boolean uiReady;
+    /** Shown on screen when start-up degraded, so a bug is never a blank page. */
+    private String fatalError;
     private boolean paused;
     private float accumulator;
     private float lastFrameNanos;
@@ -98,16 +104,42 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+        // Report the driver's actual GL version in the log: "why is this device
+        // black" is almost always a GLES feature question.
+        android.util.Log.i("LastStar", "GL_RENDERER=" + android.opengl.GLES20.glGetString(GLES20_RENDERER)
+                + " GL_VERSION=" + android.opengl.GLES20.glGetString(GLES20_VERSION));
+
+        // Initialise in two halves. The world renderer failing is fatal, but the
+        // UI renderer failing must not be: if only the UI is broken the player
+        // still gets a world and an on-screen error, instead of a black surface.
         try {
             renderer.init(world, getContext().getAssets());
+            worldReady = true;
+        } catch (RuntimeException e) {
+            worldReady = false;
+            fatalError = "world renderer: " + e.getMessage();
+            android.util.Log.e("LastStar", "world init failed", e);
+        }
+        try {
             uiRenderer = new UiRenderer();
             uiRenderer.init();
-            sound.init();
-            ready = true;
-            camera.snapBehind(world);
+            uiReady = true;
         } catch (RuntimeException e) {
-            ready = false;
-            android.util.Log.e("LastStar", "Initialisation failed", e);
+            uiReady = false;
+            if (fatalError == null) {
+                fatalError = "ui renderer: " + e.getMessage();
+            }
+            android.util.Log.e("LastStar", "ui init failed", e);
+        }
+        try {
+            sound.init();
+        } catch (RuntimeException e) {
+            // Audio is a nicety; a device without a usable track still plays.
+            android.util.Log.w("LastStar", "audio unavailable: " + e.getMessage());
+        }
+        ready = worldReady;
+        if (ready) {
+            camera.snapBehind(world);
         }
     }
 
@@ -166,8 +198,7 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
         }
 
         if (!ready) {
-            android.opengl.GLES20.glClearColor(0.05f, 0.06f, 0.09f, 1f);
-            android.opengl.GLES20.glClear(android.opengl.GLES20.GL_COLOR_BUFFER_BIT);
+            drawStartupFailure();
             return;
         }
 
@@ -184,6 +215,13 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
         float vh = screenH * uiScale;
         UiBatch batch = uiBatch;
         batch.begin(Math.round(vw), Math.round(vh));
+
+        if (!uiReady) {
+            // World is fine but the interface is not: still draw the world, and
+            // say so on screen rather than leaving a silent, untappable view.
+            drawErrorText(batch);
+            return;
+        }
 
         if (inMenu) {
             menu.update(dt);
@@ -205,6 +243,45 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
 
         hud.update(dt);
         hud.draw(batch, world, controls, debugOverlay);
+        uiRenderer.draw(batch, screenW, screenH);
+    }
+
+    /**
+     * The screen shown when the world renderer could not start. It must never be
+     * a flat colour: a blank screen is indistinguishable from a frozen app, and
+     * that is exactly how a shader bug shipped unnoticed.
+     */
+    private void drawStartupFailure() {
+        android.opengl.GLES20.glClearColor(0.05f, 0.06f, 0.09f, 1f);
+        android.opengl.GLES20.glClear(android.opengl.GLES20.GL_COLOR_BUFFER_BIT);
+        if (uiRenderer == null || !uiReady) {
+            return;
+        }
+        UiBatch batch = uiBatch;
+        float uiScale = TouchControls.scaleFor(screenW, screenH);
+        batch.begin(Math.round(screenW * uiScale), Math.round(screenH * uiScale));
+        drawErrorText(batch);
+    }
+
+    /** Draws a readable failure card instead of an empty screen. */
+    private void drawErrorText(UiBatch batch) {
+        float vw = batch.virtualWidth;
+        float vh = batch.virtualHeight;
+        com.laststar.game.ui.GenshinKit.panel(batch, vw * 0.10f, vh * 0.30f,
+                vw * 0.80f, vh * 0.34f, 1f);
+        com.laststar.game.ui.GenshinKit.title(batch, "START-UP FAILED",
+                vw * 0.5f, vh * 0.30f + 26f, uiRenderer.font(), 1f);
+        String msg = fatalError == null ? "unknown error" : fatalError;
+        if (msg.length() > 78) {
+            msg = msg.substring(0, 78);
+        }
+        batch.textSpacedCentred(msg, vw * 0.5f, vh * 0.30f + 58f, 1, 0.5f,
+                com.laststar.game.ui.Style.CREAM[0], com.laststar.game.ui.Style.CREAM[1],
+                com.laststar.game.ui.Style.CREAM[2], 1f, uiRenderer.font());
+        batch.textSpacedCentred("full details in logcat under tag LastStar",
+                vw * 0.5f, vh * 0.30f + 74f, 1, 0.5f,
+                com.laststar.game.ui.Style.CREAM_DIM[0], com.laststar.game.ui.Style.CREAM_DIM[1],
+                com.laststar.game.ui.Style.CREAM_DIM[2], 1f, uiRenderer.font());
         uiRenderer.draw(batch, screenW, screenH);
     }
 

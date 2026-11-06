@@ -41,6 +41,10 @@ echo "==> compiling simulation + harness"
   desktop/HeadlessTest.java desktop/PngWriter.java desktop/Raster.java \
   desktop/ScreenshotTool.java desktop/MenuPreview.java
 
+echo "==> checking GLSL ES 1.00 rules that a syntax parser cannot see"
+python3 tools/extract_shaders.py
+python3 tools/check_glsl.py
+
 echo "==> running headless verification"
 "$JAVA_BIN" -cp "$OUT" HeadlessTest
 

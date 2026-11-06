@@ -78,6 +78,9 @@ public final class SceneRenderer {
 
     private float time;
 
+    /** Non-null when start-up degraded; surfaced on screen by the surface. */
+    public String lastError;
+
     public void init(World world, android.content.res.AssetManager assets) {
         sceneProgram = GlProgram.create(Shaders.SCENE_VERT, Shaders.SCENE_FRAG);
         skyProgram = GlProgram.create(Shaders.SKY_VERT, Shaders.SKY_FRAG);
@@ -96,10 +99,19 @@ public final class SceneRenderer {
 
         loadModels(world, assets);
 
-        playerRig = HumanoidRig.player();
-        wardenRig = HumanoidRig.warden();
-        playerParts = rigMeshes(playerRig);
-        wardenParts = rigMeshes(wardenRig);
+        // The characters are important but not worth failing start-up over: if
+        // the rig cannot be built the world still renders without actors.
+        try {
+            playerRig = HumanoidRig.player();
+            wardenRig = HumanoidRig.warden();
+            playerParts = rigMeshes(playerRig);
+            wardenParts = rigMeshes(wardenRig);
+        } catch (RuntimeException e) {
+            android.util.Log.e("LastStar", "character rig unavailable", e);
+            lastError = "rig: " + e.getMessage();
+            playerParts = new Mesh[0];
+            wardenParts = new Mesh[0];
+        }
         pickups = new Mesh[]{
                 toMesh(Geometry.octahedron(0.28f, 0.35f, 0.95f, 0.62f)),
                 toMesh(Geometry.octahedron(0.26f, 0.98f, 0.78f, 0.30f))

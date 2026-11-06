@@ -32,14 +32,29 @@ public final class UiRenderer {
                     + "  vColor = aColor;\n"
                     + "}\n";
 
-    private static final String FRAG =
+    /**
+     * Optional derivative extension.
+     *
+     * <p>{@code fwidth()} is only available in GLSL ES 1.00 through
+     * {@code GL_OES_standard_derivatives}, and asking for it without the
+     * {@code #extension} directive is a *compile error* on Mali and Adreno --
+     * which is what made the whole app render nothing but its clear colour.
+     * The renderer tries the extended shader first and silently falls back to
+     * {@link #FRAG_PLAIN} when the driver refuses it, so text antialiasing
+     * degrades gracefully instead of taking the game down.</p>
+     */
+    private static final String EXT_DIRECTIVE = "#extension GL_OES_standard_derivatives : enable\n";
+
+    private static final String FRAG_HEAD =
             "precision mediump float;\n"
                     + "varying vec2 vUv;\n"
                     + "varying vec4 vColor;\n"
                     + "uniform sampler2D uTex;\n"
                     + "uniform float uDf;\n"
-                    + "uniform float uSmooth;\n"
-                    + "void main() {\n"
+                    + "uniform float uSmooth;\n";
+
+    private static final String FRAG_BODY =
+            "void main() {\n"
                     + "  vec4 texel = texture2D(uTex, vUv);\n"
                     + "  float coverage = texel.a;\n"
                     + "  if (uDf > 0.5) {\n"
@@ -50,6 +65,25 @@ public final class UiRenderer {
                     + "  if (vColor.a < 0.004) discard;\n"
                     + "  gl_FragColor = vec4(vColor.rgb, vColor.a * coverage);\n"
                     + "}\n";
+
+    /**
+     * Fallback without derivatives: the atlas is bilinear filtered, so a
+     * threshold on the coverage value still gives clean edges -- just without
+     * the screen-space-width smoothing the extended version gets.
+     */
+    private static final String FRAG_PLAIN_BODY =
+            "void main() {\n"
+                    + "  vec4 texel = texture2D(uTex, vUv);\n"
+                    + "  float coverage = texel.a;\n"
+                    + "  if (uDf > 0.5) {\n"
+                    + "    coverage = smoothstep(0.34, 0.66, texel.a);\n"
+                    + "  }\n"
+                    + "  if (vColor.a < 0.004) discard;\n"
+                    + "  gl_FragColor = vec4(vColor.rgb, vColor.a * coverage);\n"
+                    + "}\n";
+
+    private static final String FRAG = FRAG_HEAD + FRAG_BODY;
+    private static final String FRAG_PLAIN = FRAG_HEAD + FRAG_PLAIN_BODY;
 
     private GlProgram program;
     private int texture;
@@ -68,7 +102,15 @@ public final class UiRenderer {
     private int uSmooth = -1;
 
     public void init() {
-        program = GlProgram.create(VERT, FRAG);
+        // Ask for the derivative extension first; a driver that refuses it gets
+        // the plain shader. Either way init() must not throw, or the GL surface
+        // shows nothing at all.
+        try {
+            program = GlProgram.create(VERT, EXT_DIRECTIVE + FRAG);
+        } catch (RuntimeException e) {
+            android.util.Log.w("LastStar", "derivative shader unavailable, using plain UI shader");
+            program = GlProgram.create(VERT, FRAG_PLAIN);
+        }
         aPos = GLES20.glGetAttribLocation(program.id, "aPos");
         aUv = GLES20.glGetAttribLocation(program.id, "aUv");
         aColor = GLES20.glGetAttribLocation(program.id, "aColor");

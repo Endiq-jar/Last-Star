@@ -58,6 +58,13 @@ jobs:
             -bootclasspath "$ANDROID_JAR" -classpath "$ANDROID_JAR" \
             -d build/ci-classes @build/all-sources.txt
 
+      # Catches shader errors that only a driver would normally report -- the
+      # class of bug that once left the app showing nothing but its clear colour.
+      - name: Lint the shaders for GLES2 rules
+        run: |
+          python3 tools/extract_shaders.py
+          python3 tools/check_glsl.py
+
       - name: Run the headless verification suite
         run: |
           source tools/.toolchain/env.sh
