@@ -29,10 +29,10 @@ public final class SceneRenderer {
 
     /** Time-of-day driven palette, blended over the run. */
     public static final class Sky {
-        public float horizonR = 0.42f, horizonG = 0.51f, horizonB = 0.62f;
-        public float zenithR = 0.09f, zenithG = 0.16f, zenithB = 0.34f;
-        public float sunR = 1.00f, sunG = 0.86f, sunB = 0.62f;
-        public float ambientR = 0.35f, ambientG = 0.40f, ambientB = 0.48f;
+        public float horizonR = 0.96f, horizonG = 0.86f, horizonB = 0.72f;
+        public float zenithR = 0.20f, zenithG = 0.44f, zenithB = 0.78f;
+        public float sunR = 1.00f, sunG = 0.95f, sunB = 0.76f;
+        public float ambientR = 0.46f, ambientG = 0.52f, ambientB = 0.68f;
         public float fogDensity = 0.0007f;
     }
 
@@ -556,20 +556,30 @@ public final class SceneRenderer {
                 (float) Math.cos(yawRad) * (float) Math.cos(pitchRad)).normalized();
     }
 
+    /**
+     * Time-of-day palette.
+     *
+     * <p>Daylight is golden hour: a warm cream horizon under a saturated
+     * cerulean zenith, with a pale-gold sun. Night is moonlit blue, dark
+     * enough that emissive effects (shards, runes, the sword arc) read as
+     * light sources rather than as slightly-brighter paint.</p>
+     *
+     * <p>Kept in step with {@code ScreenshotTool.drawWorld} so the repository
+     * screenshots show what the APK actually renders.</p>
+     */
     private void updateSky(World world, Camera camera, float night) {
-        // Dusk palette lerped toward night as the run progresses.
-        sky.horizonR = Noise.lerp(0.80f, 0.13f, night);
-        sky.horizonG = Noise.lerp(0.64f, 0.14f, night);
-        sky.horizonB = Noise.lerp(0.58f, 0.28f, night);
+        sky.horizonR = Noise.lerp(0.96f, 0.11f, night);
+        sky.horizonG = Noise.lerp(0.86f, 0.12f, night);
+        sky.horizonB = Noise.lerp(0.72f, 0.26f, night);
         sky.zenithR = Noise.lerp(0.20f, 0.03f, night);
-        sky.zenithG = Noise.lerp(0.34f, 0.05f, night);
-        sky.zenithB = Noise.lerp(0.66f, 0.15f, night);
-        sky.sunR = Noise.lerp(1.00f, 0.62f, night);
-        sky.sunG = Noise.lerp(0.84f, 0.72f, night);
-        sky.sunB = Noise.lerp(0.58f, 0.95f, night);
-        sky.ambientR = Noise.lerp(0.55f, 0.26f, night);
-        sky.ambientG = Noise.lerp(0.58f, 0.30f, night);
-        sky.ambientB = Noise.lerp(0.66f, 0.44f, night);
+        sky.zenithG = Noise.lerp(0.44f, 0.06f, night);
+        sky.zenithB = Noise.lerp(0.78f, 0.16f, night);
+        sky.sunR = Noise.lerp(1.00f, 0.44f, night);
+        sky.sunG = Noise.lerp(0.95f, 0.52f, night);
+        sky.sunB = Noise.lerp(0.76f, 0.86f, night);
+        sky.ambientR = Noise.lerp(0.46f, 0.09f, night);
+        sky.ambientG = Noise.lerp(0.52f, 0.12f, night);
+        sky.ambientB = Noise.lerp(0.68f, 0.24f, night);
         sky.fogDensity = Noise.lerp(0.0007f, 0.0016f, night);
         sunPitch = Noise.lerp(34f, 12f, night);
         sunYaw = 42f + world.worldTime * 0.35f;

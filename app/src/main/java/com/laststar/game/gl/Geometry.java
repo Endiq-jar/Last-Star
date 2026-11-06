@@ -168,14 +168,23 @@ public final class Geometry {
             // Nearer peaks are darker and sharper; far ones dissolve into haze.
             float haze = 0.10f + 0.42f * back;
 
-            int sides = 5 + r.nextInt(3);
+            // More sides: a 5-sided cone reads as a paper party hat. Eight to
+            // twelve facets with a strong per-facet radial jitter gives the
+            // asymmetric, chiselled profile of painted mountain ranges.
+            int sides = 8 + r.nextInt(5);
             float[] jitter = new float[sides];
+            // Two jitter scales: one per facet for the chisel, and one shared
+            // pair per peak so the whole mountain is pushed off-centre in a
+            // direction rather than being a symmetric cone with noisy edges.
+            float shear = (r.nextFloat() - 0.5f) * 0.34f;
+            float lean = (r.nextFloat() - 0.5f) * 0.26f;
             for (int i = 0; i < sides; i++) {
-                jitter[i] = 0.78f + r.nextFloat() * 0.44f;
+                float wobble = (i % 2 == 0) ? 1.0f : 0.86f;
+                jitter[i] = (0.72f + r.nextFloat() * 0.52f) * wobble;
             }
             // A slightly off-centre apex gives the classic asymmetric peak.
-            float apexX = cx + (r.nextFloat() - 0.5f) * w * 0.22f;
-            float apexZ = cz + (r.nextFloat() - 0.5f) * w * 0.22f;
+            float apexX = cx + shear * w * 1.9f + (r.nextFloat() - 0.5f) * w * 0.22f;
+            float apexZ = cz + lean * w * 1.9f + (r.nextFloat() - 0.5f) * w * 0.22f;
             float snowline = h * (0.64f + r.nextFloat() * 0.14f);
 
             int base = b.vertexCount();
@@ -183,8 +192,10 @@ public final class Geometry {
                 double a = i * Math.PI * 2.0 / sides;
                 float rx = (float) Math.cos(a) * w * jitter[i];
                 float rz = (float) Math.sin(a) * w * jitter[i];
-                float x = cx + rx;
-                float z = cz + rz;
+                // Lean the whole peak: the rim drifts as it climbs, so the
+                // ridge lines converge off-axis.
+                float x = cx + rx + shear * w;
+                float z = cz + rz + lean * w;
 
                 // Rock colour: deep cool slate, hazed towards the sky by
                 // distance. The near range stays dark enough to silhouette
@@ -199,8 +210,8 @@ public final class Geometry {
                 b.addVertex(x, -2f, z, n.x, n.y, n.z, cr, cg, cb, 1f, 0f);
 
                 // Snow cap ring: same rim, lifted to the snowline.
-                float capR = rx * 0.42f;
-                float capZ = rz * 0.42f;
+                float capR = (rx + shear * w) * 0.42f + shear * w * 0.5f;
+                float capZ = (rz + lean * w) * 0.42f + lean * w * 0.5f;
                 float sc = 0.84f + r.nextFloat() * 0.08f;
                 b.addVertex(cx + capR, snowline, cz + capZ,
                         n.x, n.y, n.z, sc, sc, Noise.clamp01(sc + 0.06f), 1f, 0f);
