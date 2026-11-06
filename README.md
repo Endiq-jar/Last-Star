@@ -6,7 +6,7 @@ repository**, no Unity, no Gradle, no Android Studio required.
 [![APK](https://img.shields.io/badge/APK-last--star--1.0.0.apk-2ea44f)](apk/last-star-1.0.0.apk)
 [![minSdk](https://img.shields.io/badge/minSdk-21%20(Android%205.0)-blue)]()
 [![size](https://img.shields.io/badge/size-462%20KiB-informational)]()
-[![tests](https://img.shields.io/badge/headless%20checks-13%2C573%20passing-brightgreen)]()
+[![tests](https://img.shields.io/badge/headless%20checks-13%2C578%20passing-brightgreen)]()
 [![licence](https://img.shields.io/badge/licence-EPL--2.0-lightgrey)](LICENSE)
 
 ![Last Star gameplay](docs/screenshots/02-gameplay.png)
@@ -28,7 +28,7 @@ repository**, no Unity, no Gradle, no Android Studio required.
 Works on **every Android device since Android 5.0 (API 21)** — 32-bit, 64-bit,
 ARM and x86. No permissions at all: no internet, no ads, no analytics, ~462 KiB.
 Signed with APK schemes v1 + v2 + v3
-(SHA-256 `656a3bb75cc3628a4644ce831c426ba74b99eb4fb1f4acd3b8614d61af67ba7b`).
+(SHA-256 `eadf86e1a33107910d4829c5b1c1bff1db3753680aebfe8dc340237633ad1501`).
 
 ### Controls
 
@@ -140,7 +140,7 @@ the licence notes are in [`CREDITS.md`](CREDITS.md).
 
 [`.github/workflows/android-ci.yml`](.github/workflows/android-ci.yml) runs on
 **every push to every branch** and on `workflow_dispatch`: it fetches the
-toolchain from npm and PyPI, compiles all sources, runs the 13,573 headless
+toolchain from npm and PyPI, compiles all sources, runs the 13,578 headless
 checks, builds and signs the APK, asserts `assets/models/world.bin` is packaged,
 and uploads the APK as a build artefact.
 
@@ -219,7 +219,7 @@ self-signed hobby key, not a Play Store identity.
 There is no GPU, emulator or phone in this environment, so correctness is proven
 two ways — `tools/run_tests.sh` runs both:
 
-1. **13,573 headless assertions** (`desktop/HeadlessTest.java`) drive the real
+1. **13,578 headless assertions** (`desktop/HeadlessTest.java`) drive the real
    simulation: terrain sampling, camera matrices and clamping, movement and
    stamina, melee arcs, enemy AI states, pickups, death/respawn, victory and
    restart, mesh and index validity, the HUD font atlas, **the menu screens**
