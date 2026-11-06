@@ -85,7 +85,8 @@ Clear all six to restore the sky, then begin the next, harder night.
 * Procedurally generated 220 m × 220 m island ringed by foothills, with a
   **snow-capped mountain range** on the horizon (a separate 56-peak mesh that
   follows the camera, so the skyline is never empty), a lake with sand
-  shoreline — dressed with **84 imported CC0 models** (7,000+ trees, rocks, bushes, grass and flowers; cliff ridges; a
+  shoreline — dressed with **84 imported CC0 models**, including **14 rock
+  spires built from imported cliff blocks** standing inside the map itself (7,000+ trees, rocks, bushes, grass and flowers; cliff ridges; a
   castle gatehouse, a courtyard with towers, a camp and a watchtower), distance
   culled per model so the draw count stays low while the map looks full
 * Six shards, five+ Wardens (more each level) with telegraph → swing → recover
