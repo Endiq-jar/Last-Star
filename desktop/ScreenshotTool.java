@@ -181,19 +181,25 @@ public final class ScreenshotTool {
 
     private static void drawWorld(Raster raster, World world, Camera cam, float aspect,
                                   float night, float extraTime) {
-        float horizonR = Noise.lerp(0.62f, 0.10f, night);
-        float horizonG = Noise.lerp(0.58f, 0.12f, night);
-        float horizonB = Noise.lerp(0.62f, 0.26f, night);
-        float zenithR = Noise.lerp(0.16f, 0.03f, night);
-        float zenithG = Noise.lerp(0.26f, 0.05f, night);
-        float zenithB = Noise.lerp(0.52f, 0.13f, night);
-        float sunR = Noise.lerp(1.00f, 0.62f, night);
-        float sunG = Noise.lerp(0.84f, 0.72f, night);
-        float sunB = Noise.lerp(0.58f, 0.95f, night);
-        float ambR = Noise.lerp(0.42f, 0.20f, night);
-        float ambG = Noise.lerp(0.44f, 0.23f, night);
-        float ambB = Noise.lerp(0.50f, 0.34f, night);
+        // Golden-hour anime palette: a warm cream horizon under a saturated
+        // cerulean zenith, lit by a pale-gold sun. This is the same palette
+        // SceneRenderer.updateSky produces for the APK.
+        float horizonR = Noise.lerp(0.96f, 0.11f, night);
+        float horizonG = Noise.lerp(0.86f, 0.12f, night);
+        float horizonB = Noise.lerp(0.72f, 0.26f, night);
+        float zenithR = Noise.lerp(0.20f, 0.03f, night);
+        float zenithG = Noise.lerp(0.44f, 0.06f, night);
+        float zenithB = Noise.lerp(0.78f, 0.16f, night);
+        float sunR = Noise.lerp(1.00f, 0.44f, night);
+        float sunG = Noise.lerp(0.95f, 0.52f, night);
+        float sunB = Noise.lerp(0.76f, 0.86f, night);
+        float ambR = Noise.lerp(0.46f, 0.09f, night);
+        float ambG = Noise.lerp(0.52f, 0.12f, night);
+        float ambB = Noise.lerp(0.68f, 0.24f, night);
         float fogD = Noise.lerp(0.0007f, 0.0016f, night);
+
+        // Stars only appear once the sky has actually darkened.
+        float starVisibility = Noise.clamp01((night - 0.45f) / 0.45f);
 
         float sunYaw = (float) Math.toRadians(42f + world.worldTime * 0.35f);
         float sunPitch = (float) Math.toRadians(Noise.lerp(34f, 12f, night));
@@ -208,6 +214,10 @@ public final class ScreenshotTool {
         float sunScreenY = raster.height * (0.5f - 0.38f * (float) Math.sin(sunPitch));
         float visible = Math.cos(rel) > 0f ? 1f : 0f;
 
+        // Configure the sky before drawing it: stars and cloud drift are read
+        // inside drawSky.
+        raster.setStars(starVisibility);
+        raster.setSkyTime(night * 40f + extraTime);
         raster.drawSky(horizonR, horizonG, horizonB, zenithR, zenithG, zenithB,
                 sunScreenX, sunScreenY, raster.height * 0.115f,
                 sunR, sunG, sunB, visible);

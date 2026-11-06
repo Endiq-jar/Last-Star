@@ -39,30 +39,49 @@ public final class Geometry {
 
                 // Grass, rock, sand and snow blended by slope/height with a
                 // little noise so the ground never reads as one flat colour.
-                // The ramp is deliberately high-key and slightly cool: anime
-                // greenery sits around #6DBE6E with a teal shadow side, and the
-                // props are lit with the same sun, so the ground has to keep up
-                // or the whole frame turns olive.
-                float patch = Noise.clamp01(0.5f + 0.5f * fastNoise(x * 0.045f, z * 0.045f));
+                // Three octaves of patch noise: broad meadow variation, mid
+                // scale clumps, then a fine speckle that stands in for grass
+                // blade texture. Without the high frequencies a wide terrain
+                // triangle lands on one raster step and the field turns into a
+                // single flat plate of green.
+                float p1 = Noise.clamp01(0.5f + 0.5f * fastNoise(x * 0.032f, z * 0.032f));
+                float p2 = Noise.clamp01(0.5f + 0.5f * fastNoise(x * 0.14f, z * 0.14f));
+                float p3 = Noise.clamp01(0.5f + 0.5f * fastNoise(x * 0.62f, z * 0.62f));
+                float patch = p1;
 
-                float gr = 0.36f + 0.10f * blend + 0.05f * patch;
-                float gg = 0.62f + 0.14f * blend + 0.04f * patch;
-                float gb = 0.34f + 0.10f * blend + 0.05f * patch;
+                // Base meadow: a warm yellow-green in the sun, deepening to a
+                // saturated teal-green in the hollows.
+                float gr = Noise.lerp(0.30f, 0.50f, p1) + 0.035f * blend;
+                float gg = Noise.lerp(0.56f, 0.78f, p1) + 0.035f * blend;
+                float gb = Noise.lerp(0.26f, 0.38f, p1) + 0.030f * blend;
 
-                // Dry/dirt patches: warm sand, not brown mud.
-                float dirtT = Noise.smoothstep(0.62f, 0.92f, patch) * 0.72f;
-                gr = lerp(gr, 0.72f, dirtT);
-                gg = lerp(gg, 0.60f, dirtT);
-                gb = lerp(gb, 0.44f, dirtT);
+                // Mid-scale clumps: this is what stops the field looking like
+                // a lawn and starts it looking painted.
+                gr += (p2 - 0.5f) * 0.085f;
+                gg += (p2 - 0.5f) * 0.105f;
+                gb += (p2 - 0.5f) * 0.070f;
+
+                // Fine speckle, kept subtle: it survives as texture at close
+                // range and averages out into a clean field in the distance.
+                float speck = (p3 - 0.5f) * 0.055f;
+                gr += speck;
+                gg += speck * 1.15f;
+                gb += speck * 0.75f;
+
+                // Dry earth: warm sand patches showing through the grass.
+                float dirtT = Noise.smoothstep(0.66f, 0.94f, p2) * 0.80f;
+                gr = lerp(gr, 0.76f, dirtT);
+                gg = lerp(gg, 0.62f, dirtT);
+                gb = lerp(gb, 0.42f, dirtT);
 
                 // Rock on any real gradient. The threshold is deliberately low:
                 // a 1-in-3 mountain face is only slope 0.5 here, and the whole
                 // point of the ring is that it reads as rock, not as a green
                 // hill. Grey-violet, so it sits between the grass and the sky.
                 float rockT = Noise.smoothstep(0.10f, 0.34f, slope);
-                gr = lerp(gr, 0.56f, rockT);
-                gg = lerp(gg, 0.58f, rockT);
-                gb = lerp(gb, 0.66f, rockT);
+                gr = lerp(gr, 0.56f + 0.06f * p3, rockT);
+                gg = lerp(gg, 0.58f + 0.06f * p3, rockT);
+                gb = lerp(gb, 0.66f + 0.05f * p3, rockT);
 
                 // High ground rock is warmer, like weathered granite.
                 float altT = Noise.smoothstep(18f, 38f, y);
@@ -79,7 +98,7 @@ public final class Geometry {
                 // Snow on the summits only. The band is broken up by noise so
                 // the snowline is ragged rather than a painted contour, and it
                 // hugs the peaks: the arena floor stays green.
-                float line = 40f + patch * 9f;
+                float line = 40f + p1 * 9f;
                 float snowT = Noise.smoothstep(line, line + 11f, y);
                 gr = lerp(gr, 0.96f, snowT);
                 gg = lerp(gg, 0.97f, snowT);

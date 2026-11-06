@@ -75,16 +75,40 @@ public final class Raster {
 
     // ------------------------------------------------------------------ clear
 
-    /** Vertical sky gradient plus sun disc and speckle stars. */
+    private float skyTime = 0f;
+    private float starVisibility = 1f;
+
+    /** 0 hides stars entirely (daylight); 1 shows them all. */
+    public void setStars(float v) {
+        starVisibility = clamp01(v);
+    }
+
+    /** Advances the cloud drift in the painted sky. */
+    public void setSkyTime(float t) {
+        skyTime = t;
+    }
+
+    /**
+     * Painted sky: banded vertical gradient, sun with bloom, cloud streaks and
+     * stars. Kept in step with {@code Shaders.SKY_FRAG} so screenshots show
+     * what a phone renders.
+     */
     public void drawSky(float horizonR, float horizonG, float horizonB,
                         float zenithR, float zenithG, float zenithB,
                         float sunScreenX, float sunScreenY, float sunRadius,
-                        float sunR, float sunG, float sunB, float sunVisible) {
+                        float sR, float sG, float sB, float sunVisible) {
         for (int y = 0; y < height; y++) {
             float t = 1f - (float) y / height;
-            float r = horizonR + (zenithR - horizonR) * (float) Math.pow(t, 0.75f);
-            float g = horizonG + (zenithG - horizonG) * (float) Math.pow(t, 0.75f);
-            float b = horizonB + (zenithB - horizonB) * (float) Math.pow(t, 0.75f);
+            float powT = (float) Math.pow(t, 0.80);
+            float r = lerp(horizonR, zenithR, powT);
+            float g = lerp(horizonG, zenithG, powT);
+            float b = lerp(horizonB, zenithB, powT);
+            // Soft banding: flat zones with blurred boundaries.
+            float bt = (float) (Math.floor(powT * 7.0) / 7.0 + 0.05);
+            r = lerp(r, lerp(horizonR, zenithR, bt), 0.45f);
+            g = lerp(g, lerp(horizonG, zenithG, bt), 0.45f);
+            b = lerp(b, lerp(horizonB, zenithB, bt), 0.45f);
+
             for (int x = 0; x < width; x++) {
                 float rr = r;
                 float gg = g;
@@ -93,26 +117,72 @@ public final class Raster {
                     float dx = (x - sunScreenX) / sunRadius;
                     float dy = (y - sunScreenY) / (sunRadius * 1.05f);
                     float d = (float) Math.sqrt(dx * dx + dy * dy);
-                    float disc = clamp01((1f - d) * 9f);
-                    float halo = clamp01(1f - d * 0.55f);
-                    rr += sunR * (disc * 1.3f + halo * halo * halo * 0.22f);
-                    gg += sunG * (disc * 1.3f + halo * halo * halo * 0.19f);
-                    bb += sunB * (disc * 1.3f + halo * halo * halo * 0.13f);
+                    float disc = smoothstep(0.070f * (sunRadius / 40f), 0.052f * (sunRadius / 40f), d * 0.22f);
+                    float bloom = (float) Math.pow(smoothstep(0.62f, 0f, d * 0.22f), 3.0) * 0.55f;
+                    float halo = (float) Math.pow(smoothstep(0.30f, 0f, d * 0.22f), 1.6) * 0.30f;
+                    rr += sR * (disc * 1.35f + halo) + sR * 0.86f * bloom;
+                    gg += sG * (disc * 1.35f + halo) + sG * 0.86f * bloom * 0.94f;
+                    bb += sB * (disc * 1.35f + halo) + sB * 0.72f * bloom * 0.90f;
                 }
-                // Stars in the upper half.
-                if (y < height * 0.62f) {
+
+                // Cloud streaks: stretched noise in the mid sky, drifting.
+                float band = smoothstep(0.18f, 0.62f, t) * (1f - smoothstep(0.62f, 0.96f, t));
+                if (band > 0.002f) {
+                    float nx = x * 6.0f / width + skyTime * 0.004f;
+                    float ny = y * 13.0f / height;
+                    float cn = vnoise(nx, ny) * 0.62f + vnoise(nx * 2.3f, ny * 2.3f) * 0.38f;
+                    float cloud = smoothstep(0.58f, 0.82f, cn) * band * 0.55f;
+                    if (cloud > 0.002f) {
+                        float cr = lerp(sR, 1f, 0.62f);
+                        float cg = lerp(sG, 0.97f, 0.62f);
+                        float cbn = lerp(sB, 0.94f, 0.62f);
+                        rr = lerp(rr, cr, cloud);
+                        gg = lerp(gg, cg, cloud);
+                        bb = lerp(bb, cbn, cloud);
+                    }
+                }
+
+                // Stars in the upper sky.
+                if (starVisibility > 0.01f && y < height * 0.62f) {
                     float hsh = (float) (Math.sin(x * 12.9898 + y * 78.233) * 43758.5453);
                     hsh -= (float) Math.floor(hsh);
-                    if (hsh > 0.99955f) {
-                        float k = 0.35f + 0.5f * (1f - (float) y / (height * 0.7f));
-                        rr += k;
-                        gg += k;
-                        bb += k;
+                    if (hsh > 0.9968f) {
+                        float k = 0.55f + 0.45f * (float) Math.sin(skyTime * 2.2 + hsh * 60f);
+                        float fade = smoothstep(0.30f, 0.70f, t);
+                        float sv = k * 0.85f * fade * starVisibility;
+                        rr += sv;
+                        gg += sv;
+                        bb += sv;
                     }
                 }
                 argb[y * width + x] = pack(rr, gg, bb, 1f);
             }
         }
+    }
+
+    private static float smoothstep(float e0, float e1, float x) {
+        float t = clamp01((x - e0) / (e1 - e0 + 1e-9f));
+        return t * t * (3f - 2f * t);
+    }
+
+    /** Deterministic value noise, used for cloud streaks. */
+    private static float vnoise(float x, float y) {
+        float fx = (float) Math.floor(x);
+        float fy = (float) Math.floor(y);
+        float ax = x - fx;
+        float ay = y - fy;
+        float ux = ax * ax * (3f - 2f * ax);
+        float uy = ay * ay * (3f - 2f * ay);
+        float a = hash2(fx, fy);
+        float b = hash2(fx + 1f, fy);
+        float c = hash2(fx, fy + 1f);
+        float d = hash2(fx + 1f, fy + 1f);
+        return lerp(lerp(a, b, ux), lerp(c, d, ux), uy);
+    }
+
+    private static float hash2(float x, float y) {
+        float v = (float) Math.sin(x * 127.1f + y * 311.7f) * 43758.5453f;
+        return v - (float) Math.floor(v);
     }
 
     public void clearDepth() {
@@ -121,91 +191,154 @@ public final class Raster {
 
     // -------------------------------------------------------------- geometry
 
+    /**
+     * A vertex on its way through the pipeline: world position, normal and
+     * colour. Carrying attributes through the clipper is what lets the fill
+     * shade per pixel instead of per triangle.
+     */
+    private static final class V {
+        float x;
+        float y;
+        float z;
+        float nx;
+        float ny;
+        float nz;
+        float r;
+        float g;
+        float b;
+        float a;
+
+        V copy() {
+            V v = new V();
+            v.x = x;
+            v.y = y;
+            v.z = z;
+            v.nx = nx;
+            v.ny = ny;
+            v.nz = nz;
+            v.r = r;
+            v.g = g;
+            v.b = b;
+            v.a = a;
+            return v;
+        }
+
+        static V lerp(V p, V q, float t) {
+            V v = new V();
+            v.x = p.x + (q.x - p.x) * t;
+            v.y = p.y + (q.y - p.y) * t;
+            v.z = p.z + (q.z - p.z) * t;
+            v.nx = p.nx + (q.nx - p.nx) * t;
+            v.ny = p.ny + (q.ny - p.ny) * t;
+            v.nz = p.nz + (q.nz - p.nz) * t;
+            v.r = p.r + (q.r - p.r) * t;
+            v.g = p.g + (q.g - p.g) * t;
+            v.b = p.b + (q.b - p.b) * t;
+            v.a = p.a + (q.a - p.a) * t;
+            return v;
+        }
+    }
+
     /** A mesh instance with a model matrix. */
     public void drawMesh(float[] positions, float[] normals, float[] colors, short[] indices,
                          Mat4 model, float alpha, float emissive, float[] tint, float tintAmount) {
+        drawMesh(positions, normals, colors, indices, model, alpha, emissive, tint, tintAmount,
+                false);
+    }
+
+    /**
+     * Draws a mesh with per-pixel shading: attributes are interpolated across
+     * the triangle exactly as the rasteriser in the driver does, so the toon
+     * ramp lands on the same pixels here as it does on a phone.
+     *
+     * <p>When {@code unlit} is true the interpolated vertex colour is used
+     * directly, which is what the GPU does for sky, water highlights and
+     * emissive effect geometry.</p>
+     */
+    public void drawMesh(float[] positions, float[] normals, float[] colors, short[] indices,
+                         Mat4 model, float alpha, float emissive, float[] tint, float tintAmount,
+                         boolean unlit) {
         int tris = indices.length / 3;
-        float[] w = new float[3];
+        V[] tri = new V[3];
         for (int t = 0; t < tris; t++) {
             int i0 = indices[t * 3] & 0xFFFF;
             int i1 = indices[t * 3 + 1] & 0xFFFF;
             int i2 = indices[t * 3 + 2] & 0xFFFF;
-            Vec3 p0 = transform(model, positions, i0);
-            Vec3 p1 = transform(model, positions, i1);
-            Vec3 p2 = transform(model, positions, i2);
-
-            // Face normal in world space for flat shading.
-            Vec3 e1 = p1.sub(p0);
-            Vec3 e2 = p2.sub(p0);
-            Vec3 n = e1.cross(e2).normalized();
-            float ndl = Math.max(0f, n.x * sun[0] + n.y * sun[1] + n.z * sun[2]);
-            float sky = 0.55f + 0.45f * Math.max(0f, n.y);
-            float lightR = ambient[0] * sky + sunR * ndl;
-            float lightG = ambient[1] * sky + sunG * ndl;
-            float lightB = ambient[2] * sky + sunB * ndl;
-
-            float cr = (colors[i0 * 4] + colors[i1 * 4] + colors[i2 * 4]) / 3f;
-            float cg = (colors[i0 * 4 + 1] + colors[i1 * 4 + 1] + colors[i2 * 4 + 1]) / 3f;
-            float cb = (colors[i0 * 4 + 2] + colors[i1 * 4 + 2] + colors[i2 * 4 + 2]) / 3f;
-            if (tint != null && tintAmount > 0f) {
-                cr = cr + (tint[0] - cr) * tintAmount;
-                cg = cg + (tint[1] - cg) * tintAmount;
-                cb = cb + (tint[2] - cb) * tintAmount;
-            }
-            float r = cr * lightR + cr * emissive;
-            float g = cg * lightG + cg * emissive;
-            float b = cb * lightB + cb * emissive;
-
-            // Distance fog, measured from the camera to the triangle centroid.
-            Vec3 centroid = p0.add(p1).add(p2).mul(1f / 3f);
-            float dist = (float) Math.sqrt(centroid.lengthSq() - centroid.dot(camPos) * 2f
-                    + camPos.lengthSq());
-            float fog = 1f - (float) Math.exp(-dist * fogDensity);
-            r = r + (fogColour[0] - r) * fog;
-            g = g + (fogColour[1] - g) * fog;
-            b = b + (fogColour[2] - b) * fog;
-
-            drawTriangle(p0, p1, p2, r, g, b, alpha);
+            tri[0] = vertex(model, positions, normals, colors, i0, alpha, emissive, tint, tintAmount);
+            tri[1] = vertex(model, positions, normals, colors, i1, alpha, emissive, tint, tintAmount);
+            tri[2] = vertex(model, positions, normals, colors, i2, alpha, emissive, tint, tintAmount);
+            shadeTriangle(tri[0], tri[1], tri[2], unlit);
         }
     }
 
-    private Vec3 transform(Mat4 m, float[] pos, int i) {
+    private V vertex(Mat4 m, float[] pos, float[] nrm, float[] col, int i,
+                     float alpha, float emissive, float[] tint, float tintAmount) {
+        V v = new V();
         float x = pos[i * 3];
         float y = pos[i * 3 + 1];
         float z = pos[i * 3 + 2];
-        return new Vec3(
-                m.m[0] * x + m.m[4] * y + m.m[8] * z + m.m[12],
-                m.m[1] * x + m.m[5] * y + m.m[9] * z + m.m[13],
-                m.m[2] * x + m.m[6] * y + m.m[10] * z + m.m[14]);
+        v.x = m.m[0] * x + m.m[4] * y + m.m[8] * z + m.m[12];
+        v.y = m.m[1] * x + m.m[5] * y + m.m[9] * z + m.m[13];
+        v.z = m.m[2] * x + m.m[6] * y + m.m[10] * z + m.m[14];
+        float nx = nrm[i * 3];
+        float ny = nrm[i * 3 + 1];
+        float nz = nrm[i * 3 + 2];
+        v.nx = m.m[0] * nx + m.m[4] * ny + m.m[8] * nz;
+        v.ny = m.m[1] * nx + m.m[5] * ny + m.m[9] * nz;
+        v.nz = m.m[2] * nx + m.m[6] * ny + m.m[10] * nz;
+        float r = col[i * 4];
+        float g = col[i * 4 + 1];
+        float b = col[i * 4 + 2];
+        if (tint != null && tintAmount > 0f) {
+            r = r + (tint[0] - r) * tintAmount;
+            g = g + (tint[1] - g) * tintAmount;
+            b = b + (tint[2] - b) * tintAmount;
+        }
+        // Fold the emissive term into the colour: it is a flat add, so it rides
+        // along with the interpolated attribute for free.
+        v.r = r * (1f + emissive);
+        v.g = g * (1f + emissive);
+        v.b = b * (1f + emissive);
+        v.a = col[i * 4 + 3] * alpha;
+        return v;
     }
 
-    /** Near-plane clipping then scanline rasterisation with a z-buffer. */
-    private void drawTriangle(Vec3 a, Vec3 b, Vec3 c, float r, float g, float bl, float alpha) {
-        Vec3[] poly = {toView(a), toView(b), toView(c)};
-        Vec3[] clipped = clipNear(poly);
+    /** Near-plane clip, then fan the resulting polygon through the filler. */
+    private void shadeTriangle(V a, V b, V c, boolean unlit) {
+        V[] poly = {toView(a), toView(b), toView(c)};
+        V[] clipped = clipNear(poly);
         if (clipped == null) {
             return;
         }
         for (int i = 1; i + 1 < clipped.length; i++) {
-            fillProjected(clipped[0], clipped[i], clipped[i + 1], r, g, bl, alpha);
+            fillGouraud(clipped[0], clipped[i], clipped[i + 1], unlit);
         }
     }
 
-    private Vec3 toView(Vec3 world) {
-        return new Vec3(
-                view.m[0] * world.x + view.m[4] * world.y + view.m[8] * world.z + view.m[12],
-                view.m[1] * world.x + view.m[5] * world.y + view.m[9] * world.z + view.m[13],
-                view.m[2] * world.x + view.m[6] * world.y + view.m[10] * world.z + view.m[14]);
+    private V toView(V world) {
+        V v = world.copy();
+        v.x = view.m[0] * world.x + view.m[4] * world.y + view.m[8] * world.z + view.m[12];
+        v.y = view.m[1] * world.x + view.m[5] * world.y + view.m[9] * world.z + view.m[13];
+        v.z = view.m[2] * world.x + view.m[6] * world.y + view.m[10] * world.z + view.m[14];
+        // The normal is already in world space; the view matrix is a rigid
+        // transform, so rotate it the same way for the rim term.
+        float nx = world.nx;
+        float ny = world.ny;
+        float nz = world.nz;
+        v.nx = view.m[0] * nx + view.m[4] * ny + view.m[8] * nz;
+        v.ny = view.m[1] * nx + view.m[5] * ny + view.m[9] * nz;
+        v.nz = view.m[2] * nx + view.m[6] * ny + view.m[10] * nz;
+        return v;
     }
 
     /** Sutherland-Hodgman against the single near plane z = -near. */
-    private Vec3[] clipNear(Vec3[] poly) {
+    private V[] clipNear(V[] poly) {
         float limit = -near;
-        Vec3[] out = new Vec3[poly.length + 1];
+        V[] out = new V[poly.length + 1];
         int count = 0;
         for (int i = 0; i < poly.length; i++) {
-            Vec3 cur = poly[i];
-            Vec3 nxt = poly[(i + 1) % poly.length];
+            V cur = poly[i];
+            V nxt = poly[(i + 1) % poly.length];
             boolean curIn = cur.z < limit;
             boolean nxtIn = nxt.z < limit;
             if (curIn) {
@@ -213,29 +346,43 @@ public final class Raster {
             }
             if (curIn != nxtIn) {
                 float t = (limit - cur.z) / (nxt.z - cur.z);
-                out[count++] = cur.lerp(nxt, t);
+                out[count++] = V.lerp(cur, nxt, t);
             }
         }
         if (count < 3) {
             return null;
         }
-        Vec3[] result = new Vec3[count];
+        V[] result = new V[count];
         System.arraycopy(out, 0, result, 0, count);
         return result;
     }
 
-    private float[] sx = new float[8];
-    private float[] sy = new float[8];
-    private float[] sz = new float[8];
+    /**
+     * Perspective-correct Gouraud fill. Barycentric weights pick the pixel;
+     * 1/w weighting interpolates the attributes; then the same toon shading
+     * the fragment shader runs is evaluated here, per pixel.
+     */
+    private void fillGouraud(V a, V b, V c, boolean unlit) {
+        float ax = a.x;
+        float ay = a.y;
+        float az = a.z;
+        float bx = b.x;
+        float by = b.y;
+        float bz = b.z;
+        float cx = c.x;
+        float cy = c.y;
+        float cz = c.z;
 
-    private void fillProjected(Vec3 a, Vec3 b, Vec3 c, float r, float g, float bl, float alpha) {
-        project(a, 0);
-        project(b, 1);
-        project(c, 2);
+        float[] p0s = new float[3];
+        float[] p1s = new float[3];
+        float[] p2s = new float[3];
+        projectPoint(ax, ay, az, p0s);
+        projectPoint(bx, by, bz, p1s);
+        projectPoint(cx, cy, cz, p2s);
 
-        float x0 = sx[0], y0 = sy[0], z0 = sz[0];
-        float x1 = sx[1], y1 = sy[1], z1 = sz[1];
-        float x2 = sx[2], y2 = sy[2], z2 = sz[2];
+        float x0 = p0s[0], y0 = p0s[1], iw0 = p0s[2];
+        float x1 = p1s[0], y1 = p1s[1], iw1 = p1s[2];
+        float x2 = p2s[0], y2 = p2s[1], iw2 = p2s[2];
 
         int minX = (int) Math.max(0, Math.floor(Math.min(x0, Math.min(x1, x2))));
         int maxX = (int) Math.min(width - 1, Math.ceil(Math.max(x0, Math.max(x1, x2))));
@@ -244,15 +391,12 @@ public final class Raster {
         if (minX > maxX || minY > maxY) {
             return;
         }
-
         float area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
         if (Math.abs(area) < 1e-9f) {
             return;
         }
         float invArea = 1f / area;
-
-        int col = pack(r, g, bl, alpha);
-        boolean opaque = alpha >= 0.999f;
+        boolean opaque = a.a >= 0.999f && b.a >= 0.999f && c.a >= 0.999f;
 
         for (int y = minY; y <= maxY; y++) {
             float py = y + 0.5f;
@@ -264,38 +408,122 @@ public final class Raster {
                 if (w0 < 0f || w1 < 0f || w2 < 0f) {
                     continue;
                 }
-                // Perspective-correct depth interpolation.
-                float invZ = w0 / z0 + w1 / z1 + w2 / z2;
-                if (invZ <= 0f) {
+                float invW = w0 * iw0 + w1 * iw1 + w2 * iw2;
+                if (invW <= 0f) {
                     continue;
                 }
-                float z = 1f / invZ;
                 int idx = y * width + x;
+                float z = 1f / invW;
                 if (z >= depth[idx]) {
                     continue;
                 }
+                float pa = w0 * iw0 / invW;
+                float pb = w1 * iw1 / invW;
+                float pc = 1f - pa - pb;
+
+                float r = a.r * pa + b.r * pb + c.r * pc;
+                float g = a.g * pa + b.g * pb + c.g * pc;
+                float bl = a.b * pa + b.b * pb + c.b * pc;
+                float al = a.a * pa + b.a * pb + c.a * pc;
+
+                float nx = a.nx * pa + b.nx * pb + c.nx * pc;
+                float ny = a.ny * pa + b.ny * pb + c.ny * pc;
+                float nz = a.nz * pa + b.nz * pb + c.nz * pc;
+                float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+                if (len > 1e-6f) {
+                    nx /= len;
+                    ny /= len;
+                    nz /= len;
+                } else {
+                    nx = 0f;
+                    ny = 1f;
+                    nz = 0f;
+                }
+
+                float wx = pa * a.x + pb * b.x + pc * c.x;
+                float wy = pa * a.y + pb * b.y + pc * c.y;
+                float wz = pa * a.z + pb * b.z + pc * c.z;
+
+                if (!unlit) {
+                    float[] lit = shadeToon(r, g, bl, nx, ny, nz, wx, wy, wz);
+                    r = lit[0];
+                    g = lit[1];
+                    bl = lit[2];
+                }
                 if (opaque) {
                     depth[idx] = z;
-                    argb[idx] = col;
+                    argb[idx] = pack(r, g, bl, Math.min(1f, al));
                 } else {
-                    blend(idx, col, alpha);
+                    blend(idx, pack(r, g, bl, 1f), Math.min(1f, al));
                 }
             }
         }
     }
 
-    private void project(Vec3 v, int slot) {
-        float x = proj.m[0] * v.x + proj.m[8] * v.z;
-        float y = proj.m[5] * v.y + proj.m[9] * v.z;
-        float z = proj.m[10] * v.z + proj.m[14];
-        float w = -v.z;
+    private final float[] shadeScratch = new float[3];
+
+    /**
+     * The toon model, mirroring {@code Shaders.SCENE_FRAG} term for term:
+     * three-tone ramp, cool shadow, rim light, sky fill, squared fog.
+     */
+    private float[] shadeToon(float cr, float cg, float cb,
+                              float nx, float ny, float nz,
+                              float wx, float wy, float wz) {
+        float ndl = nx * sun[0] + ny * sun[1] + nz * sun[2];
+        float facing = clamp01(ndl * 0.5f + 0.5f);
+        float lit = band(facing, 0.56f);
+        float mid = band(facing, 0.47f) * (1f - lit);
+
+        float skyGrad = clamp01(0.35f + 0.35f * ny);
+        float ambR = ambient[0] * lerp(0.52f, 1f, skyGrad);
+        float ambG = ambient[1] * lerp(0.60f, 1f, skyGrad);
+        float ambB = ambient[2] * lerp(0.92f, 1f, skyGrad);
+
+        float r = cr * ambR * 0.78f;
+        float g = cg * ambG * 0.78f;
+        float b = cb * ambB * 0.78f;
+        r = r + (cr * ambR * 1.10f - r) * mid;
+        g = g + (cg * ambG * 1.10f - g) * mid;
+        b = b + (cb * ambB * 1.10f - b) * mid;
+        float sunLit = 0.62f * lit + 0.22f * mid;
+        r = Math.min(r + cr * sunR * sunLit, 1.06f);
+        g = Math.min(g + cg * sunG * sunLit, 1.06f);
+        b = Math.min(b + cb * sunB * sunLit, 1.06f);
+
+        float vx = camPos.x - wx;
+        float vy = camPos.y - wy;
+        float vz = camPos.z - wz;
+        float vl = (float) Math.sqrt(vx * vx + vy * vy + vz * vz) + 1e-6f;
+        float ndv = clamp01((nx * vx + ny * vy + nz * vz) / vl);
+        float rim = (float) Math.pow(1f - ndv, 3.0) * 0.34f;
+        float skyFill = clamp01(ny * 0.5f + 0.5f) * 0.42f;
+
+        r += cr * rim + cr * 0.16f * skyFill;
+        g += cg * rim + cg * 0.22f * skyFill;
+        b += cb * rim + cb * 0.34f * skyFill;
+
+        float dist = vl;
+        float fog = 1f - (float) Math.exp(-dist * fogDensity);
+        fog = fog * fog;
+        r = r + (fogColour[0] - r) * fog;
+        g = g + (fogColour[1] - g) * fog;
+        b = b + (fogColour[2] - b) * fog;
+
+        shadeScratch[0] = r;
+        shadeScratch[1] = g;
+        shadeScratch[2] = b;
+        return shadeScratch;
+    }
+
+    /** View-space point to screen coordinates, plus 1/w for correction. */
+    private void projectPoint(float x, float y, float z, float[] out) {
+        float px = proj.m[0] * x + proj.m[8] * z;
+        float py = proj.m[5] * y + proj.m[9] * z;
+        float w = -z;
         float invW = 1f / w;
-        float ndcX = x * invW;
-        float ndcY = y * invW;
-        float ndcZ = z * invW;
-        sx[slot] = (ndcX * 0.5f + 0.5f) * width;
-        sy[slot] = (1f - (ndcY * 0.5f + 0.5f)) * height;
-        sz[slot] = ndcZ;
+        out[0] = (px * invW * 0.5f + 0.5f) * width;
+        out[1] = (1f - (py * invW * 0.5f + 0.5f)) * height;
+        out[2] = invW;
     }
 
     private void blend(int idx, int col, float alpha) {
@@ -430,6 +658,20 @@ public final class Raster {
         int bi = (int) (clamp01(b) * 255f);
         int ai = (int) (clamp01(a) * 255f);
         return (ai << 24) | (ri << 16) | (gi << 8) | bi;
+    }
+
+    /**
+     * Hard step with a 1.5% edge, matching {@code band()} in the scene shader:
+     * flat zones with a crisp terminator between them.
+     */
+    private static float band(float x, float edge) {
+        float t = (x - (edge - 0.015f)) / 0.03f;
+        t = clamp01(t);
+        return t * t * (3f - 2f * t);
+    }
+
+    private static float lerp(float a, float b, float t) {
+        return a + (b - a) * t;
     }
 
     public static float clamp01(float v) {
