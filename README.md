@@ -28,7 +28,7 @@ repository**, no Unity, no Gradle, no Android Studio required.
 Works on **every Android device since Android 5.0 (API 21)** — 32-bit, 64-bit,
 ARM and x86. No permissions at all: no internet, no ads, no analytics, ~462 KiB.
 Signed with APK schemes v1 + v2 + v3
-(SHA-256 `ef184281b4e4bec3cc0ebbd0534dd1e3cc4d009fa155a48fd222e18001f3f7bd`).
+(SHA-256 `656a3bb75cc3628a4644ce831c426ba74b99eb4fb1f4acd3b8614d61af67ba7b`).
 
 ### Controls
 
@@ -82,9 +82,10 @@ world from dusk into night — sky, fog, sun and ambient light all shift as you
 progress — and every second shard heals you and raises your maximum health.
 Clear all six to restore the sky, then begin the next, harder night.
 
-* Procedurally generated 220 m × 220 m island: rolling hills, ridged mountains, a
-  lake with sand shoreline, snow on the peaks — dressed with **84 imported CC0
-  models** (7,000+ trees, rocks, bushes, grass and flowers; cliff ridges; a
+* Procedurally generated 220 m × 220 m island ringed by foothills, with a
+  **snow-capped mountain range** on the horizon (a separate 56-peak mesh that
+  follows the camera, so the skyline is never empty), a lake with sand
+  shoreline — dressed with **84 imported CC0 models** (7,000+ trees, rocks, bushes, grass and flowers; cliff ridges; a
   castle gatehouse, a courtyard with towers, a camp and a watchtower), distance
   culled per model so the draw count stays low while the map looks full
 * Six shards, five+ Wardens (more each level) with telegraph → swing → recover
