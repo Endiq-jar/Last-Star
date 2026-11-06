@@ -39,7 +39,8 @@ echo "==> compiling simulation + harness"
   -classpath "$ANDROID_JAR" -d "$OUT" \
   @"$ROOT/build/test-sources.txt" \
   desktop/HeadlessTest.java desktop/PngWriter.java desktop/Raster.java \
-  desktop/ScreenshotTool.java desktop/MenuPreview.java
+  desktop/ScreenshotTool.java desktop/MenuPreview.java \
+  desktop/ModelLoaderFixture.java
 
 echo "==> checking GLSL ES 1.00 rules that a syntax parser cannot see"
 python3 tools/extract_shaders.py

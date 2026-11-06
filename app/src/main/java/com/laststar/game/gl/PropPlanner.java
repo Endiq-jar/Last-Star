@@ -131,7 +131,10 @@ public final class PropPlanner {
     /** Landmarks are few and large; they are always drawn. */
     public final List<Instance> landmarks = new ArrayList<Instance>();
 
+    private final Terrain terrain;
+
     public PropPlanner(ModelLibrary models, Terrain terrain, long seed) {
+        this.terrain = terrain;
         int cols = 16;
         grid = new Grid(terrain.size / cols, -terrain.size * 0.5f, -terrain.size * 0.5f,
                 cols, cols);
@@ -552,6 +555,11 @@ public final class PropPlanner {
                         0.86f + t * 0.12f, 0.90f + t * 0.09f, 1.0f, 0.25f + t * 0.55f));
             }
         }
+    }
+
+    /** The terrain the plan was built against. */
+    public Terrain terrain() {
+        return terrain;
     }
 
     /** Total instances in the plan, landmarks included. */

@@ -6,6 +6,8 @@ import com.laststar.game.core.Terrain;
 import com.laststar.game.core.Vec3;
 import com.laststar.game.gl.Geometry;
 import com.laststar.game.gl.MeshData;
+import com.laststar.game.gl.ModelLibrary;
+import com.laststar.game.gl.PropPlanner;
 import com.laststar.game.ui.Font;
 import com.laststar.game.ui.UiBatch;
 import com.laststar.game.world.Enemy;
@@ -35,6 +37,7 @@ public final class HeadlessTest {
         testNoiseDeterminism();
         testTerrain();
         testMountains();
+        testNoBlackScreen();
         testMatrices();
         testCamera();
         testGeometry();
@@ -207,6 +210,96 @@ public final class HeadlessTest {
             }
         }
         check(steepest < 0.55f, "playable ring has no walls (steepest " + steepest + ")");
+    }
+
+
+    /**
+     * The app shipped once showing nothing but its clear colour, because a
+     * fragment shader failed to compile inside onSurfaceCreated and the
+     * exception was swallowed. Rendering a frame and asserting that the image
+     * actually varies is the only test that would have caught it from the
+     * outside, so it is here.
+     */
+    private static void testNoBlackScreen() {
+        section("no black screen");
+
+        // 1. A rendered frame must contain real content, not one flat colour.
+        World world = new World(20261105L);
+        world.beginRun();
+        Camera camera = new Camera();
+        camera.snapBehind(world);
+        camera.update(1f / 60f, world, null, 0f);
+        Raster raster = new Raster(160, 90,
+                camera.viewMatrix(), camera.projectionMatrix(16f / 9f));
+        raster.setCameraPosition(camera.position);
+        raster.setSun(0.4f, 0.8f, 0.3f, 1f, 0.9f, 0.7f);
+        raster.setAmbient(0.5f, 0.55f, 0.66f);
+        raster.setFog(0.0007f, 0.80f, 0.64f, 0.58f);
+        raster.clearDepth();
+        raster.drawSky(0.80f, 0.64f, 0.58f, 0.20f, 0.34f, 0.66f,
+                600f, 200f, 60f, 1f, 0.84f, 0.58f, 1f);
+        // Draw the world the way the renderer does: terrain, then the range.
+        MeshData terrain = com.laststar.game.gl.Geometry.terrain(world.terrain);
+        raster.drawMesh(terrain.positions, terrain.normals, terrain.colors,
+                terrain.indices, new Mat4(), 1f, 0f, null, 0f);
+        MeshData range = com.laststar.game.gl.Geometry.mountainRange(
+                520f, 96f, 56, world.worldSeed ^ 0x5A5A5A5AL, 230f);
+        Mat4 rangeMatrix = new Mat4();
+        rangeMatrix.m[12] = camera.position.x;
+        rangeMatrix.m[14] = camera.position.z;
+        raster.drawMesh(range.positions, range.normals, range.colors,
+                range.indices, rangeMatrix, 1f, 0.06f, null, 0f);
+        java.util.HashSet<Integer> colours = new java.util.HashSet<>();
+        for (int px : raster.argb) {
+            colours.add(px);
+        }
+        check(colours.size() > 200,
+                "frame has varied content (" + colours.size() + " distinct colours)");
+        check(colours.size() > 800, "frame is not a flat clear colour");
+
+        // 2. The clear-colour fallback must not be the only thing drawn.
+        int first = raster.argb[0];
+        int differing = 0;
+        for (int px : raster.argb) {
+            if (px != first) {
+                differing++;
+            }
+        }
+        check(differing > raster.argb.length / 2,
+                "most of the frame is not the background colour ("
+                        + (100 * differing / raster.argb.length) + "%)");
+
+        // 3. In-world peaks must be present, so "mountains everywhere" cannot
+        //    silently regress to a bare horizon.
+        ModelLibrary models = ModelLoaderFixture.load();
+        if (models == null) {
+            System.out.println("  (model set not built; skipping placement checks)");
+            return;
+        }
+        PropPlanner planner = new PropPlanner(models, world.terrain, 20261105L);
+        check(planner.count() > 2000, "world is dressed (" + planner.count() + " props)");
+        check(countHighPlaced(planner) > 30,
+                "rock spires stand in the world ("
+                        + countHighPlaced(planner) + " elevated blocks)");
+    }
+
+    /** Instances that sit well above their own footprint, i.e. stacked spires. */
+    private static int countHighPlaced(PropPlanner planner) {
+        int n = 0;
+        PropPlanner.Grid g = planner.grid;
+        for (int cz = 0; cz < g.rows(); cz++) {
+            for (int cx = 0; cx < g.cols(); cx++) {
+                java.util.List<PropPlanner.Instance> cell = g.cell(cx, cz);
+                for (int i = 0; i < cell.size(); i++) {
+                    PropPlanner.Instance in = cell.get(i);
+                    float ground = planner.terrain().heightAt(in.x, in.z);
+                    if (in.y > ground + 2.5f && in.scale > 2f) {
+                        n++;
+                    }
+                }
+            }
+        }
+        return n;
     }
 
     private static void testMatrices() {
