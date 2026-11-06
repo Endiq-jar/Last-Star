@@ -239,7 +239,7 @@ Android 11+ requires.
 
 ```
 apk/                          ← the installable artefact
-app/src/main/java/            ← the game (44 classes, ~9,600 lines)
+app/src/main/java/            ← the game (46 classes, ~10,550 lines)
   com/laststar/game/
     core/     Vec3, Mat4, Noise, Terrain, Camera     (pure maths / world)
     world/    World, Player, Enemy, Shard, Pickup…   (pure simulation)
