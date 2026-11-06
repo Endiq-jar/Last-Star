@@ -45,6 +45,9 @@ echo "==> checking GLSL ES 1.00 rules that a syntax parser cannot see"
 python3 tools/extract_shaders.py
 python3 tools/check_glsl.py
 
+echo "==> verifying the real GL start-up path (shaders, renderer, one frame)"
+"$ROOT/tools/render_path_test.sh"
+
 echo "==> running headless verification"
 "$JAVA_BIN" -cp "$OUT" HeadlessTest
 

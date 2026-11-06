@@ -65,6 +65,11 @@ jobs:
           python3 tools/extract_shaders.py
           python3 tools/check_glsl.py
 
+      # Runs SceneRenderer.init and UiRenderer.init against a stand-in GLES20 so
+      # a shader that would not compile on a phone fails the build instead.
+      - name: Verify the GL start-up path
+        run: ./tools/render_path_test.sh
+
       - name: Run the headless verification suite
         run: |
           source tools/.toolchain/env.sh
