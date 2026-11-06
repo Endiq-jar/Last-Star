@@ -72,3 +72,28 @@ under the repository's EPL-2.0 licence.
 
 The three Unity projects under `upstream/` keep their own licences — see
 [`upstream/README.md`](upstream/README.md).
+
+## Rendering
+
+The world is drawn with a hand-written toon shader, not with an imported
+material:
+
+* **Three-tone banding** — the diffuse term is quantised so lit faces are one
+  flat value and shadowed faces are another, with a narrow terminator band
+  between them. This is what makes the frame read as illustration.
+* **Cool shadows** — the shadow term shifts toward blue-violet instead of
+  going black. Anime foliage keeps its colour in shadow; dimming it toward
+  black is what makes stylised terrain look muddy.
+* **Rim light** — a bright edge on silhouettes that turn away from the camera,
+  which separates characters from the background.
+* **Painted sky** — banded vertical gradient, sun disc with bloom, procedural
+  cloud streaks and stars that only appear once the sky has darkened.
+* **Wind** — grass, flowers and foliage carry a per-vertex phase derived from
+  height above each model's base, so tips bend and roots stay planted. The
+  amplitude is per-role: ground cover sways, rocks and timber do not.
+* **Aerial perspective** — squared distance fog, so near geometry keeps its
+  colour while the horizon dissolves into the sky.
+
+No derivatives, no extensions: every shader here runs on GLSL ES 1.00 as
+shipped, and `tools/check_glsl.py` enforces the rules that once kept the app
+from starting on Mali and Adreno hardware.
