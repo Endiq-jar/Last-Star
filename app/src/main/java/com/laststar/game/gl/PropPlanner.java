@@ -152,6 +152,7 @@ public final class PropPlanner {
 
         buildLandmarks(models, terrain, seed);
         buildRidges(models, terrain, seed);
+        buildPeaks(models, terrain, seed);
     }
 
     // ------------------------------------------------------------- scattering
@@ -480,6 +481,75 @@ public final class PropPlanner {
                 grid.add(new Instance(index, x, h - metres * 0.28f, z,
                         r.nextFloat() * 360f, m.scaleTo(metres),
                         0f, 0f, 0f, 0f));
+            }
+        }
+    }
+
+    /**
+     * Rock spires: mountains built out of the imported rock and cliff models,
+     * standing on the foothills so they read from the whole map.
+     *
+     * <p>The distant range on the horizon is generated geometry, but these sit
+     * inside the playable world: stacked, rotated and scaled stone blocks that
+     * form real silhouettes you can walk up to. Each peak is a small
+     * teardrop -- a few wide blocks at the base, a few tall ones on top --
+     * because a single scaled rock reads as a boulder, not a mountain.</p>
+     */
+    private void buildPeaks(ModelLibrary models, Terrain terrain, long seed) {
+        java.util.Random r = new java.util.Random(seed + 4242);
+        int peaks = 14;
+        float placed = 0f;
+        for (int k = 0; k < peaks * 6 && placed < peaks; k++) {
+            double ang = r.nextDouble() * Math.PI * 2.0;
+            float dist = 62f + r.nextFloat() * 40f;
+            float x = (float) Math.cos(ang) * dist;
+            float z = (float) Math.sin(ang) * dist;
+            float h = terrain.heightAt(x, z);
+            // Peaks need ground above the water and clear of the spawn arena.
+            if (h < terrain.waterLevel + 2.5f) {
+                continue;
+            }
+            placed++;
+
+            int role = models.count(ModelLibrary.CLIFF) > 0
+                    ? ModelLibrary.CLIFF : ModelLibrary.ROCK;
+            float scale = 5.5f + r.nextFloat() * 4.5f;
+            int base = 3 + r.nextInt(3);
+            // Skirt: broad blocks around the foot, sunk into the hillside.
+            for (int i = 0; i < base; i++) {
+                double a = (i / (double) base) * Math.PI * 2.0 + r.nextDouble() * 0.7;
+                float rad = 1.6f + r.nextFloat() * 1.8f;
+                int index = models.pickIndex(role, i * 13 + k * 29);
+                if (index < 0) {
+                    continue;
+                }
+                ModelLibrary.Model m = models.get(index);
+                grid.add(new Instance(index,
+                        x + (float) Math.cos(a) * rad,
+                        h - 1.2f,
+                        z + (float) Math.sin(a) * rad,
+                        r.nextFloat() * 360f,
+                        m.scaleTo(scale * (0.85f + r.nextFloat() * 0.4f)),
+                        0.92f, 0.95f, 1.04f, 0.35f));
+            }
+            // Body and spire: progressively smaller and taller blocks.
+            int stack = 3 + r.nextInt(3);
+            for (int i = 0; i < stack; i++) {
+                int index = models.pickIndex(role, i * 7 + k * 17 + 3);
+                if (index < 0) {
+                    continue;
+                }
+                ModelLibrary.Model m = models.get(index);
+                float t = i / (float) stack;
+                float shrink = 0.75f - t * 0.34f;
+                grid.add(new Instance(index,
+                        x + (r.nextFloat() - 0.5f) * 1.2f * shrink,
+                        h + i * scale * 0.42f,
+                        z + (r.nextFloat() - 0.5f) * 1.2f * shrink,
+                        r.nextFloat() * 360f,
+                        m.scaleTo(scale * (0.95f - t * 0.55f)),
+                        // Snow creeping down: the higher the block, the paler.
+                        0.86f + t * 0.12f, 0.90f + t * 0.09f, 1.0f, 0.25f + t * 0.55f));
             }
         }
     }
