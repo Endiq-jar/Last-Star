@@ -84,6 +84,7 @@ rm -f "$BUILD_DIR/base.apk"
   --target-sdk-version "$TARGET_SDK" \
   --version-code "$VERSION_CODE" \
   --version-name "$VERSION_NAME" \
+  -A app/src/main/assets \
   "$BUILD_DIR/res/compiled.zip"
 
 echo "==> 3/7 compiling Java sources"
