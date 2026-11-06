@@ -70,6 +70,9 @@ jobs:
       - name: Verify the GL start-up path
         run: ./tools/render_path_test.sh
 
+      - name: Verify the FBX import path
+        run: python3 tools/tests/test_fbx_import.py
+
       - name: Run the headless verification suite
         run: |
           source tools/.toolchain/env.sh
