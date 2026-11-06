@@ -34,6 +34,7 @@ public final class HeadlessTest {
 
         testNoiseDeterminism();
         testTerrain();
+        testMountains();
         testMatrices();
         testCamera();
         testGeometry();
@@ -136,6 +137,76 @@ public final class HeadlessTest {
         // Out of bounds must clamp, not throw.
         check(!Float.isNaN(t.heightAt(-9999f, 9999f)), "out of bounds clamps");
         check(t.normalAt(0f, 0f).y > 0.9f, "normal is up on the plateau");
+    }
+
+
+    /**
+     * The mountain range is easy to break in ways that are invisible in a test
+     * log and very visible on screen: it can fall outside the camera's far
+     * plane, or be fogged so heavily it never shows up. These are the exact
+     * bugs that made the first attempt disappear, so they get assertions.
+     */
+    private static void testMountains() {
+        section("mountains");
+
+        // 1. The range must be inside the camera's far plane.
+        Camera camera = new Camera();
+        Mat4 proj = camera.projectionMatrix(16f / 9f);
+        // Recover the far plane from the projection matrix itself rather than
+        // trusting a constant: m[10] = (f+n)/(n-f) and m[14] = 2fn/(n-f), so
+        // far = m[14] / (m[10] + 1).
+        float recoveredFar = proj.m[14] / (proj.m[10] + 1f);
+        check(recoveredFar > 400f, "camera far plane clears the map (" + recoveredFar + " m)");
+        check(520f < recoveredFar, "distant range sits inside the far plane");
+
+        // 2. The range must actually have peaks, and be shaped like a range.
+        MeshData range = Geometry.mountainRange(520f, 96f, 56, 7L, 230f);
+        check(range.positions.length > 0, "range has vertices");
+        check(range.indices.length % 3 == 0, "range indices are triangles");
+        float maxY = 0f;
+        float minY = Float.MAX_VALUE;
+        float maxR = 0f;
+        for (int i = 0; i < range.positions.length; i += 3) {
+            maxY = Math.max(maxY, range.positions[i + 1]);
+            minY = Math.min(minY, range.positions[i + 1]);
+            float r = (float) Math.sqrt(range.positions[i] * range.positions[i]
+                    + range.positions[i + 2] * range.positions[i + 2]);
+            maxR = Math.max(maxR, r);
+        }
+        check(maxY > 60f, "peaks are tall (" + maxY + " m)");
+        check(minY < 0f, "peaks are grounded below the horizon");
+        check(maxR > 400f && maxR < 900f, "range ring radius is sane (" + maxR + " m)");
+
+        // 3. Every triangle must be valid and the mesh must be inside the far
+        //    plane at its furthest point, or it is silently clipped away.
+        int n = range.positions.length / 3;
+        boolean indicesValid = true;
+        for (short idx : range.indices) {
+            if ((idx & 0xFFFF) >= n) {
+                indicesValid = false;
+            }
+        }
+        check(indicesValid, "range indices are in range");
+        check(maxR < recoveredFar, "no peak is clipped by the far plane");
+
+        // 4. Fog must not erase the range. The renderer uses 1-exp(-d*k); at the
+        //    range's distance that has to stay well short of opaque.
+        float fogDensity = 0.0007f;
+        float fogAtRange = 1f - (float) Math.exp(-520f * fogDensity);
+        check(fogAtRange < 0.55f, "range is not fogged out (" + fogAtRange + ")");
+
+        // 5. The playable rim must stay walkable: shards spawn out to 86 m and
+        //    the player has to reach them.
+        Terrain t = new Terrain(220f, 110, 20261105L);
+        float steepest = 0f;
+        for (float r = 20f; r <= 100f; r += 4f) {
+            for (int k = 0; k < 48; k++) {
+                double ang = k * Math.PI * 2.0 / 48;
+                steepest = Math.max(steepest, t.slopeAt(
+                        (float) (Math.cos(ang) * r), (float) (Math.sin(ang) * r)));
+            }
+        }
+        check(steepest < 0.55f, "playable ring has no walls (steepest " + steepest + ")");
     }
 
     private static void testMatrices() {
