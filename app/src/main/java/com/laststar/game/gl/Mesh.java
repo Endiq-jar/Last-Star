@@ -34,6 +34,13 @@ public final class Mesh {
         this.indexCount = indexCount;
     }
 
+    /** Wraps buffers that are already in the exact layout the shader wants. */
+    public static Mesh fromBuffers(FloatBuffer positions, FloatBuffer normals, FloatBuffer colors,
+                                   FloatBuffer waves, ShortBuffer indices,
+                                   int vertexCount, int indexCount) {
+        return new Mesh(positions, normals, colors, waves, indices, vertexCount, indexCount);
+    }
+
     public static Mesh create(MeshData data) {
         int vertexCount = data.vertexCount();
         FloatBuffer pb = floats(data.positions);

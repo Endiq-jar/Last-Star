@@ -99,7 +99,7 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         try {
-            renderer.init(world);
+            renderer.init(world, getContext().getAssets());
             uiRenderer = new UiRenderer();
             uiRenderer.init();
             sound.init();

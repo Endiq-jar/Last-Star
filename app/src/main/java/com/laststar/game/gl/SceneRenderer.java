@@ -20,8 +20,10 @@ import java.nio.FloatBuffer;
 /**
  * Draws the 3D world: sky, terrain, water, props, characters, particles.
  *
- * <p>All geometry is generated procedurally at start-up; the renderer therefore
- * owns no assets and only a handful of GL objects.</p>
+ * <p>Terrain, water, characters and effects are generated procedurally at
+ * start-up. The set dressing -- forest, cliffs, the castle, the camp -- is a set
+ * of imported CC0 models loaded by {@link ModelLibrary} and placed by
+ * {@link PropPlanner}. They are the only assets in the APK besides the fonts.</p>
  */
 public final class SceneRenderer {
 
@@ -48,7 +50,11 @@ public final class SceneRenderer {
     private Mesh particleMesh;
     private Mesh ringMesh;
     private Mesh cubeMesh;
-    private Mesh pillarMesh;
+
+    /** Imported props (trees, rocks, the castle...) and where they stand. */
+    private ModelLibrary models;
+    private PropPlanner props;
+    private Mesh[] propMeshes = new Mesh[0];
 
     private Mesh[] playerParts;
     private Mesh[] wardenParts;
@@ -58,6 +64,7 @@ public final class SceneRenderer {
     private final Mat4 modelMatrix = new Mat4();
     private final Mat4 mvp = new Mat4();
     private final Mat4 tmp = new Mat4();
+    private final Mat4 propScratch = new Mat4();
     private HumanoidRig playerRig;
     private HumanoidRig wardenRig;
 
@@ -66,7 +73,7 @@ public final class SceneRenderer {
 
     private float time;
 
-    public void init(World world) {
+    public void init(World world, android.content.res.AssetManager assets) {
         sceneProgram = GlProgram.create(Shaders.SCENE_VERT, Shaders.SCENE_FRAG);
         skyProgram = GlProgram.create(Shaders.SKY_VERT, Shaders.SKY_FRAG);
 
@@ -79,7 +86,8 @@ public final class SceneRenderer {
         particleMesh = toMesh(Geometry.quad(1f, 1f, 1f, 1f, 1f));
         ringMesh = toMesh(Geometry.groundRing(1f, 0.12f, 28, 1f, 1f, 1f, 1f));
         cubeMesh = toMesh(Geometry.box(1f, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 0f, 0f));
-        pillarMesh = toMesh(Geometry.cylinder(0.55f, 0.42f, 5.5f, 10, 0.55f, 0.57f, 0.62f, 1f));
+
+        loadModels(world, assets);
 
         playerRig = HumanoidRig.player();
         wardenRig = HumanoidRig.warden();
@@ -95,6 +103,28 @@ public final class SceneRenderer {
         }
 
         buildSkyQuad();
+    }
+
+    /**
+     * Loads and places the imported props. A missing or corrupt asset must not
+     * take the game down, so a failure leaves {@link #models} null and the
+     * world simply renders without set dressing.
+     */
+    private void loadModels(World world, android.content.res.AssetManager assets) {
+        try {
+            // Assets live in the APK, not on the Java classpath, so they are
+            // opened through the AssetManager rather than a class loader.
+            models = ModelLibrary.load(assets.open("models/world.bin"));
+            props = new PropPlanner(models, world.terrain, 20261105L);
+            propMeshes = new Mesh[models.size()];
+            for (int i = 0; i < models.size(); i++) {
+                propMeshes[i] = models.get(i).mesh;
+            }
+        } catch (Exception e) {
+            android.util.Log.e("LastStar", "model set unavailable: " + e.getMessage());
+            models = null;
+            props = null;
+        }
     }
 
     private Mesh[] rigMeshes(HumanoidRig rig) {
@@ -177,68 +207,90 @@ public final class SceneRenderer {
         GLES20.glDisable(GLES20.GL_DEPTH_TEST);
     }
 
+    /**
+     * Draws the imported set dressing.
+     *
+     * <p>Landmarks are always drawn; everything else is culled by a distance
+     * test against the camera, which keeps the draw count in the low thousands
+     * while the map is dressed with more props than that. Each model is a single
+     * indexed draw, so the cull is what keeps vertex-shader work proportional to
+     * what is actually on screen.</p>
+     */
     private void drawProps(World world, Camera camera) {
-        // Ancient monoliths placed on a deterministic ring, plus spawn beacon.
+        if (props == null) {
+            return;
+        }
         sceneProgram.setTintAmount(0f);
-        for (int i = 0; i < 14; i++) {
-            float ang = (float) (i * Math.PI * 2.0 / 14.0) + 0.31f;
-            float dist = 30f + (i % 4) * 11f;
-            float x = (float) Math.cos(ang) * dist;
-            float z = (float) Math.sin(ang) * dist;
-            float h = world.terrain.heightAt(x, z);
-            if (h < world.terrain.waterLevel + 0.4f) {
-                continue;
-            }
-            float scale = 0.8f + (i % 3) * 0.35f;
-            modelMatrix.setMultiply(
-                    Mat4.translation(x, h - 0.4f, z),
-                    Mat4.scale(scale, scale, scale));
-            tmp.setMultiply(frameViewProj, modelMatrix);
-            sceneProgram.setMvp(tmp.m);
-            sceneProgram.setModel(modelMatrix.m);
-            sceneProgram.setTint(0.52f, 0.54f, 0.60f, 0.85f);
-            drawMesh(pillarMesh);
+        sceneProgram.setTime(time);
+        sceneProgram.setFloat("uWaveAmp", 0f);
+
+        float camX = camera.position.x;
+        float camZ = camera.position.z;
+
+        // Landmarks first: towers and walls are the silhouettes you navigate by,
+        // so they get the longest draw distance.
+        for (int i = 0; i < props.landmarks.size(); i++) {
+            drawProp(props.landmarks.get(i), 300f, camX, camZ);
         }
 
-        // Trees / rocks scattered on the terrain to give the eye scale cues.
-        sceneProgram.setTintAmount(1f);
-        int trees = 150;
-        for (int i = 0; i < trees; i++) {
-            float rx = (hash(i * 3 + 1) - 0.5f) * world.terrain.size * 0.92f;
-            float rz = (hash(i * 7 + 5) - 0.5f) * world.terrain.size * 0.92f;
-            float h = world.terrain.heightAt(rx, rz);
-            if (h < world.terrain.waterLevel + 0.6f) {
-                continue;
+        PropPlanner.Grid grid = props.grid;
+        for (int cz = 0; cz < grid.rows(); cz++) {
+            for (int cx = 0; cx < grid.cols(); cx++) {
+                java.util.List<PropPlanner.Instance> cell = grid.cell(cx, cz);
+                for (int i = 0; i < cell.size(); i++) {
+                    PropPlanner.Instance in = cell.get(i);
+                    drawProp(in, drawDistance(in.model), camX, camZ);
+                }
             }
-            if (world.terrain.slopeAt(rx, rz) > 0.55f) {
-                continue;
-            }
-            float dist2 = rx * rx + rz * rz;
-            if (dist2 < 64f) {
-                continue;
-            }
-            float s = 0.7f + hash(i * 13 + 3) * 1.1f;
-            if (world.terrain.heightAt(rx, rz) > 9f) {
-                continue;
-            }
-            // Trunk
-            modelMatrix.setMultiply(Mat4.translation(rx, h, rz), Mat4.scale(0.16f * s, 1.5f * s, 0.16f * s));
-            tmp.setMultiply(frameViewProj, modelMatrix);
-            sceneProgram.setMvp(tmp.m);
-            sceneProgram.setModel(modelMatrix.m);
-            sceneProgram.setTint(0.20f, 0.15f, 0.11f, 0.9f);
-            drawMesh(cubeMesh);
-            // Canopy
-            float leaf = hash(i * 17 + 9);
-            modelMatrix.setMultiply(
-                    Mat4.translation(rx, h + 1.6f * s, rz),
-                    Mat4.scale(1.15f * s, 1.25f * s, 1.15f * s));
-            tmp.setMultiply(frameViewProj, modelMatrix);
-            sceneProgram.setMvp(tmp.m);
-            sceneProgram.setModel(modelMatrix.m);
-            sceneProgram.setTint(0.13f + leaf * 0.09f, 0.30f + leaf * 0.20f, 0.14f, 0.95f);
-            drawMesh(sphereMesh);
         }
+        sceneProgram.setTintAmount(0f);
+    }
+
+    /** Per-role draw distance in metres, relative to the camera. */
+    private float drawDistance(int modelIndex) {
+        switch (models.get(modelIndex).role) {
+            case ModelLibrary.GRASS:
+            case ModelLibrary.FLOWER:
+            case ModelLibrary.MUSHROOM:
+                return 30f;
+            case ModelLibrary.PLANT:
+                return 55f;
+            case ModelLibrary.ROCK:
+                return 90f;
+            case ModelLibrary.TREE:
+            case ModelLibrary.LOG:
+            case ModelLibrary.STUMP:
+                return 135f;
+            case ModelLibrary.CLIFF:
+            case ModelLibrary.HILL:
+                return 200f;
+            default:
+                return 160f;
+        }
+    }
+
+    private void drawProp(PropPlanner.Instance in, float distance, float camX, float camZ) {
+        float dx = in.x - camX;
+        float dz = in.z - camZ;
+        if (dx * dx + dz * dz > distance * distance) {
+            return;
+        }
+        modelMatrix.setMultiply(
+                Mat4.translation(in.x, in.y, in.z),
+                Mat4.rotationY(in.yaw));
+        if (in.scale != 1f) {
+            propScratch.setMultiply(modelMatrix, Mat4.scale(in.scale, in.scale, in.scale));
+            modelMatrix.copyFrom(propScratch);
+        }
+        tmp.setMultiply(frameViewProj, modelMatrix);
+        sceneProgram.setMvp(tmp.m);
+        sceneProgram.setModel(modelMatrix.m);
+        if (in.tintAmount > 0f) {
+            sceneProgram.setTint(in.tintR, in.tintG, in.tintB, in.tintAmount);
+        } else {
+            sceneProgram.setTintAmount(0f);
+        }
+        drawMesh(propMeshes[in.model]);
     }
 
     private float lastAspect = 1.7f;
@@ -382,9 +434,10 @@ public final class SceneRenderer {
         sceneProgram.setModel(modelMatrix.m);
         sceneProgram.setFloat("uWaveAmp", 0.10f);
         sceneProgram.setTime(time);
-        sceneProgram.setTint(0.30f, 0.62f, 0.78f, 0.72f);
-        sceneProgram.setTintAmount(0.55f);
-        sceneProgram.setEmissive(0.06f);
+        // Lake water: teal in the shallows, deep blue away from the ground.
+        sceneProgram.setTint(0.06f, 0.44f, 0.66f, 0.80f);
+        sceneProgram.setTintAmount(0.62f);
+        sceneProgram.setEmissive(0.10f);
         drawMesh(waterMesh);
 
         GLES20.glDepthMask(true);

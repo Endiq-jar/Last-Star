@@ -5,6 +5,8 @@ import com.laststar.game.core.Noise;
 import com.laststar.game.core.Vec3;
 import com.laststar.game.gl.Geometry;
 import com.laststar.game.gl.MeshData;
+import com.laststar.game.gl.ModelLibrary;
+import com.laststar.game.gl.PropPlanner;
 import com.laststar.game.ui.Font;
 import com.laststar.game.ui.Hud;
 import com.laststar.game.ui.TouchControls;
@@ -33,12 +35,15 @@ import java.util.List;
 public final class ScreenshotTool {
 
     private static final Font FONT = new Font();
+    /** The same baked prop set the APK ships, or null when it is not built yet. */
+    private static ModelLibrary MODELS;
 
     public static void main(String[] args) throws Exception {
         String outDir = args.length > 0 ? args[0] : "docs/screenshots";
         int w = args.length > 1 ? Integer.parseInt(args[1]) : 960;
         int h = args.length > 2 ? Integer.parseInt(args[2]) : 540;
         new File(outDir).mkdirs();
+        MODELS = loadModels();
 
         shoot(outDir, w, h, "01-intro", Scenario.INTRO);
         shoot(outDir, w, h, "02-gameplay", Scenario.GAMEPLAY);
@@ -153,6 +158,19 @@ public final class ScreenshotTool {
         System.out.println("wrote " + path);
     }
 
+    private static ModelLibrary loadModels() {
+        try {
+            ModelLibrary lib = ModelLibrary.load(new java.io.FileInputStream(
+                    "app/src/main/assets/models/world.bin"));
+            System.out.println("models: " + lib.size() + " imported props, "
+                    + lib.triangleCount() + " triangles");
+            return lib;
+        } catch (Exception e) {
+            System.out.println("models: unavailable (" + e.getMessage() + ")");
+            return null;
+        }
+    }
+
     private static void step(World world, InputState in, int frames) {
         for (int i = 0; i < frames; i++) {
             world.update(1f / 60f, in);
@@ -207,56 +225,25 @@ public final class ScreenshotTool {
 
         // Water.
         MeshData water = Geometry.waterPlane(world.terrain.size * 1.4f, 44, world.terrain.waterLevel);
-        float[] tint = {0.30f, 0.62f, 0.78f};
+        float[] tint = {0.06f, 0.44f, 0.66f};
         raster.drawMesh(water.positions, water.normals, water.colors, water.indices,
-                identity, 0.72f, 0.06f, tint, 0.55f);
+                identity, 0.72f, 0.10f, tint, 0.62f);
 
-        // Props: monoliths and trees, same placement as the renderer.
-        MeshData pillar = Geometry.cylinder(0.55f, 0.42f, 5.5f, 10, 0.55f, 0.57f, 0.62f, 1f);
-        float[] pillarTint = {0.52f, 0.54f, 0.60f};
-        for (int i = 0; i < 14; i++) {
-            float ang = (float) (i * Math.PI * 2.0 / 14.0) + 0.31f;
-            float dist = 30f + (i % 4) * 11f;
-            float x = (float) Math.cos(ang) * dist;
-            float z = (float) Math.sin(ang) * dist;
-            float hgt = world.terrain.heightAt(x, z);
-            if (hgt < world.terrain.waterLevel + 0.4f) {
-                continue;
+        // Set dressing: exactly the plan the renderer uses.
+        if (MODELS != null) {
+            PropPlanner props = new PropPlanner(MODELS, world.terrain, 20261105L);
+            for (int i = 0; i < props.landmarks.size(); i++) {
+                drawProp(raster, MODELS, props.landmarks.get(i));
             }
-            float scale = 0.8f + (i % 3) * 0.35f;
-            Mat4 m = new Mat4().setMultiply(Mat4.translation(x, hgt - 0.4f, z),
-                    Mat4.scale(scale, scale, scale));
-            raster.drawMesh(pillar.positions, pillar.normals, pillar.colors, pillar.indices,
-                    m, 1f, 0f, pillarTint, 0.85f);
-        }
-
-        MeshData cube = Geometry.box(1, 1, 1, 1, 1, 1, 1, 0, 0, 0);
-        MeshData ball = Geometry.sphere(1f, 6, 8, 1f, 1f, 1f, 1f);
-        float[] trunkTint = {0.20f, 0.15f, 0.11f};
-        for (int i = 0; i < 150; i++) {
-            float rx = (hash(i * 3 + 1) - 0.5f) * world.terrain.size * 0.92f;
-            float rz = (hash(i * 7 + 5) - 0.5f) * world.terrain.size * 0.92f;
-            float hgt = world.terrain.heightAt(rx, rz);
-            if (hgt < world.terrain.waterLevel + 0.6f || hgt > 9f) {
-                continue;
+            PropPlanner.Grid grid = props.grid;
+            for (int cz = 0; cz < grid.rows(); cz++) {
+                for (int cx = 0; cx < grid.cols(); cx++) {
+                    java.util.List<PropPlanner.Instance> cell = grid.cell(cx, cz);
+                    for (int i = 0; i < cell.size(); i++) {
+                        drawProp(raster, MODELS, cell.get(i));
+                    }
+                }
             }
-            if (world.terrain.slopeAt(rx, rz) > 0.55f) {
-                continue;
-            }
-            if (rx * rx + rz * rz < 64f) {
-                continue;
-            }
-            float s = 0.7f + hash(i * 13 + 3) * 1.1f;
-            Mat4 trunk = new Mat4().setMultiply(Mat4.translation(rx, hgt, rz),
-                    Mat4.scale(0.16f * s, 1.5f * s, 0.16f * s));
-            raster.drawMesh(cube.positions, cube.normals, cube.colors, cube.indices,
-                    trunk, 1f, 0f, trunkTint, 0.9f);
-            float leaf = hash(i * 17 + 9);
-            float[] canopyTint = {0.13f + leaf * 0.09f, 0.30f + leaf * 0.20f, 0.14f};
-            Mat4 canopy = new Mat4().setMultiply(Mat4.translation(rx, hgt + 1.6f * s, rz),
-                    Mat4.scale(1.15f * s, 1.25f * s, 1.15f * s));
-            raster.drawMesh(ball.positions, ball.normals, ball.colors, ball.indices,
-                    canopy, 1f, 0f, canopyTint, 0.95f);
         }
 
         // Shards.
@@ -343,6 +330,19 @@ public final class ScreenshotTool {
             raster.drawMesh(quad.positions, quad.normals, quad.colors, quad.indices,
                     billboard, a, 0.9f, new float[]{r, g, b}, 1f);
         }
+    }
+
+    private static void drawProp(Raster raster, ModelLibrary models, PropPlanner.Instance in) {
+        ModelLibrary.Model m = models.get(in.model);
+        Mat4 model = new Mat4().setMultiply(Mat4.translation(in.x, in.y, in.z),
+                Mat4.rotationY(in.yaw));
+        if (in.scale != 1f) {
+            model = new Mat4().setMultiply(model, Mat4.scale(in.scale, in.scale, in.scale));
+        }
+        float[] tint = in.tintAmount > 0f
+                ? new float[]{in.tintR, in.tintG, in.tintB} : null;
+        raster.drawMesh(m.positionArray(), m.normalArray(), m.colorArray(), m.indexArray(),
+                model, 1f, 0f, tint, in.tintAmount);
     }
 
     private static void drawRig(Raster raster, HumanoidRig rig, Mat4[] pose, float flash) {

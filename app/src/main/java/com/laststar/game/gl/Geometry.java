@@ -39,29 +39,33 @@ public final class Geometry {
 
                 // Grass, rock, sand and snow blended by slope/height with a
                 // little noise so the ground never reads as one flat colour.
+                // The ramp is deliberately high-key and slightly cool: anime
+                // greenery sits around #6DBE6E with a teal shadow side, and the
+                // props are lit with the same sun, so the ground has to keep up
+                // or the whole frame turns olive.
                 float patch = Noise.clamp01(0.5f + 0.5f * fastNoise(x * 0.045f, z * 0.045f));
 
-                float gr = 0.26f + 0.16f * blend + 0.06f * patch;
-                float gg = 0.50f + 0.20f * blend + 0.05f * patch;
-                float gb = 0.20f + 0.11f * blend;
+                float gr = 0.36f + 0.10f * blend + 0.05f * patch;
+                float gg = 0.62f + 0.14f * blend + 0.04f * patch;
+                float gb = 0.34f + 0.10f * blend + 0.05f * patch;
 
-                // Dry/dirt patches.
-                float dirtT = Noise.smoothstep(0.62f, 0.92f, patch) * 0.75f;
-                gr = lerp(gr, 0.47f, dirtT);
-                gg = lerp(gg, 0.38f, dirtT);
-                gb = lerp(gb, 0.24f, dirtT);
+                // Dry/dirt patches: warm sand, not brown mud.
+                float dirtT = Noise.smoothstep(0.62f, 0.92f, patch) * 0.72f;
+                gr = lerp(gr, 0.72f, dirtT);
+                gg = lerp(gg, 0.60f, dirtT);
+                gb = lerp(gb, 0.44f, dirtT);
 
-                // Rock on steep faces.
+                // Rock on steep faces: cool grey-violet.
                 float rockT = Noise.smoothstep(0.26f, 0.55f, slope);
-                gr = lerp(gr, 0.50f, rockT);
-                gg = lerp(gg, 0.50f, rockT);
-                gb = lerp(gb, 0.52f, rockT);
+                gr = lerp(gr, 0.58f, rockT);
+                gg = lerp(gg, 0.60f, rockT);
+                gb = lerp(gb, 0.68f, rockT);
 
                 // Sand around the waterline.
                 float sandT = Noise.smoothstep(t.waterLevel + 1.1f, t.waterLevel + 0.2f, y);
-                gr = lerp(gr, 0.80f, sandT);
-                gg = lerp(gg, 0.72f, sandT);
-                gb = lerp(gb, 0.48f, sandT);
+                gr = lerp(gr, 0.86f, sandT);
+                gg = lerp(gg, 0.79f, sandT);
+                gb = lerp(gb, 0.60f, sandT);
 
                 // Snow on high ridges.
                 float snowT = Noise.smoothstep(12f, 18f, y);
@@ -69,8 +73,9 @@ public final class Geometry {
                 gg = lerp(gg, 0.97f, snowT);
                 gb = lerp(gb, 1.00f, snowT);
 
-                // Gentle ambient occlusion in the valleys.
-                float ao = Noise.clamp01(0.80f + 0.28f * Noise.smoothstep(-2f, 7f, y));
+                // Gentle ambient occlusion in the valleys -- kept light so the
+                // shadow side stays blue rather than going black.
+                float ao = Noise.clamp01(0.90f + 0.14f * Noise.smoothstep(-2f, 7f, y));
                 gr *= ao;
                 gg *= ao;
                 gb *= ao;
