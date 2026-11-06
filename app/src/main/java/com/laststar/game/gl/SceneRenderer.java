@@ -33,7 +33,7 @@ public final class SceneRenderer {
         public float zenithR = 0.09f, zenithG = 0.16f, zenithB = 0.34f;
         public float sunR = 1.00f, sunG = 0.86f, sunB = 0.62f;
         public float ambientR = 0.35f, ambientG = 0.40f, ambientB = 0.48f;
-        public float fogDensity = 0.0030f;
+        public float fogDensity = 0.0007f;
     }
 
     private final Sky sky = new Sky();
@@ -50,6 +50,11 @@ public final class SceneRenderer {
     private Mesh particleMesh;
     private Mesh ringMesh;
     private Mesh cubeMesh;
+    /**
+     * The distant range. Built as a full ring, centred on the camera every
+     * frame, so the horizon is never empty no matter which way you look.
+     */
+    private Mesh mountainMesh;
 
     /** Imported props (trees, rocks, the castle...) and where they stand. */
     private ModelLibrary models;
@@ -86,6 +91,8 @@ public final class SceneRenderer {
         particleMesh = toMesh(Geometry.quad(1f, 1f, 1f, 1f, 1f));
         ringMesh = toMesh(Geometry.groundRing(1f, 0.12f, 28, 1f, 1f, 1f, 1f));
         cubeMesh = toMesh(Geometry.box(1f, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 0f, 0f));
+
+        mountainMesh = toMesh(Geometry.mountainRange(520f, 96f, 56, world.worldSeed ^ 0x5A5A5A5AL, 230f));
 
         loadModels(world, assets);
 
@@ -193,6 +200,7 @@ public final class SceneRenderer {
         sceneProgram.setFloat("uWaveAmp", 0f);
         drawMesh(terrainMesh);
 
+        drawMountains(camera);
         drawProps(world, camera);
         drawShards(world);
         drawPickups(world);
@@ -205,6 +213,30 @@ public final class SceneRenderer {
         drawParticles(world, camera);
 
         GLES20.glDisable(GLES20.GL_DEPTH_TEST);
+    }
+
+    /**
+     * Draws the distant range as a ring centred on the camera.
+     *
+     * <p>It is far outside the playable area, so rather than modelling where it
+     * really is, it is translated to follow the player in X/Z and sits at a fixed
+     * height. At 430 m out with the fog the game already applies, that is
+     * indistinguishable from real parallax, and it means one mesh covers the
+     * entire horizon from any position on the map.</p>
+     */
+    private void drawMountains(Camera camera) {
+        modelMatrix.identity();
+        modelMatrix.m[12] = camera.position.x;
+        modelMatrix.m[13] = 0f;
+        modelMatrix.m[14] = camera.position.z;
+        tmp.setMultiply(frameViewProj, modelMatrix);
+        sceneProgram.setMvp(tmp.m);
+        sceneProgram.setModel(modelMatrix.m);
+        // The range carries its own haze in the vertex colours, so it only needs
+        // a touch of extra fog and no tint.
+        sceneProgram.setTintAmount(0f);
+        sceneProgram.setEmissive(0.06f);
+        drawMesh(mountainMesh);
     }
 
     /**
@@ -526,7 +558,7 @@ public final class SceneRenderer {
         sky.ambientR = Noise.lerp(0.55f, 0.26f, night);
         sky.ambientG = Noise.lerp(0.58f, 0.30f, night);
         sky.ambientB = Noise.lerp(0.66f, 0.44f, night);
-        sky.fogDensity = Noise.lerp(0.0030f, 0.0058f, night);
+        sky.fogDensity = Noise.lerp(0.0007f, 0.0016f, night);
         sunPitch = Noise.lerp(34f, 12f, night);
         sunYaw = 42f + world.worldTime * 0.35f;
     }

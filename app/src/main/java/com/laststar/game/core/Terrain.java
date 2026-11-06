@@ -58,9 +58,14 @@ public final class Terrain {
         // Rolling base terrain.
         float h = base.fbm(nx, nz, 4, 2.02f, 0.5f) * 5.5f;
 
-        // Mountain ridges, faded out near the arena centre so combat stays fair.
-        float ridgeMask = Noise.smoothstep(0.22f, 0.75f, (float) Math.sqrt(nx * nx + nz * nz));
-        h += ridge.ridged(nx * 0.55f + 13.1f, nz * 0.55f - 7.7f, 4) * 16.0f * ridgeMask;
+        // Foothills towards the rim. Deliberately moderate: shards spawn up to
+        // 86 m out and the player has to walk to them, so the playable ground
+        // can never turn into a wall. The tall, dramatic peaks are a separate
+        // decorative range outside the map (see Geometry.mountainRange) -- they
+        // need no collision, so they can be as huge as the view wants.
+        float radial = (float) Math.sqrt(wx * wx + wz * wz) / (size * 0.5f);
+        float rim = Noise.smoothstep(0.30f, 0.92f, radial);
+        h += ridge.ridged(nx * 0.62f + 13.1f, nz * 0.62f - 7.7f, 4) * 21.0f * rim;
 
         // Fine bumps for footstep variation.
         h += detail.fbm(wx * 0.05f, wz * 0.05f, 3, 2.11f, 0.45f) * 1.1f;

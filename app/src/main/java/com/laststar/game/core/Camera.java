@@ -90,7 +90,9 @@ public final class Camera {
     }
 
     public Mat4 projectionMatrix(float aspect) {
-        return Mat4.perspective(fov, aspect, 0.08f, 420f);
+        // The far plane has to clear the distant mountain ring (430 m) with
+        // room to spare, or the whole range is clipped away silently.
+        return Mat4.perspective(fov, aspect, 0.08f, 1400f);
     }
 
     /** Applies a look input, clamped so the camera never flips. */

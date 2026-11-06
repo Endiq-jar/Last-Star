@@ -193,7 +193,7 @@ public final class ScreenshotTool {
         float ambR = Noise.lerp(0.42f, 0.20f, night);
         float ambG = Noise.lerp(0.44f, 0.23f, night);
         float ambB = Noise.lerp(0.50f, 0.34f, night);
-        float fogD = Noise.lerp(0.0062f, 0.0105f, night);
+        float fogD = Noise.lerp(0.0007f, 0.0016f, night);
 
         float sunYaw = (float) Math.toRadians(42f + world.worldTime * 0.35f);
         float sunPitch = (float) Math.toRadians(Noise.lerp(34f, 12f, night));
@@ -228,6 +228,16 @@ public final class ScreenshotTool {
         float[] tint = {0.06f, 0.44f, 0.66f};
         raster.drawMesh(water.positions, water.normals, water.colors, water.indices,
                 identity, 0.72f, 0.10f, tint, 0.62f);
+
+        // Distant range: the same ring the renderer builds, centred on the
+        // camera, so the horizon matches the APK.
+        MeshData range = Geometry.mountainRange(520f, 96f, 56,
+                world.worldSeed ^ 0x5A5A5A5AL, 230f);
+        Mat4 rangMat = new Mat4();
+        rangMat.m[12] = cam.position.x;
+        rangMat.m[14] = cam.position.z;
+        raster.drawMesh(range.positions, range.normals, range.colors, range.indices,
+                rangMat, 1f, 0.06f, null, 0f);
 
         // Set dressing: exactly the plan the renderer uses.
         if (MODELS != null) {

@@ -178,7 +178,10 @@ public final class PropPlanner {
                 continue;
             }
             // Cliffs and hills want the steep ground everything else avoids.
-            if (!openGround && slope < 0.35f) {
+            // The threshold is low because the terrain is gentle by design: the
+            // foothills peak around slope 0.24, so anything higher would leave
+            // these roles with nowhere to stand and they would silently vanish.
+            if (!openGround && slope < 0.13f) {
                 continue;
             }
             int index = models.pickIndex(role, i * 31 + 7);

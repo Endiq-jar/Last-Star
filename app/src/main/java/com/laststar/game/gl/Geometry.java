@@ -55,11 +55,20 @@ public final class Geometry {
                 gg = lerp(gg, 0.60f, dirtT);
                 gb = lerp(gb, 0.44f, dirtT);
 
-                // Rock on steep faces: cool grey-violet.
-                float rockT = Noise.smoothstep(0.26f, 0.55f, slope);
-                gr = lerp(gr, 0.58f, rockT);
-                gg = lerp(gg, 0.60f, rockT);
-                gb = lerp(gb, 0.68f, rockT);
+                // Rock on any real gradient. The threshold is deliberately low:
+                // a 1-in-3 mountain face is only slope 0.5 here, and the whole
+                // point of the ring is that it reads as rock, not as a green
+                // hill. Grey-violet, so it sits between the grass and the sky.
+                float rockT = Noise.smoothstep(0.10f, 0.34f, slope);
+                gr = lerp(gr, 0.56f, rockT);
+                gg = lerp(gg, 0.58f, rockT);
+                gb = lerp(gb, 0.66f, rockT);
+
+                // High ground rock is warmer, like weathered granite.
+                float altT = Noise.smoothstep(18f, 38f, y);
+                gr = lerp(gr, 0.62f, altT * 0.55f);
+                gg = lerp(gg, 0.62f, altT * 0.55f);
+                gb = lerp(gb, 0.68f, altT * 0.55f);
 
                 // Sand around the waterline.
                 float sandT = Noise.smoothstep(t.waterLevel + 1.1f, t.waterLevel + 0.2f, y);
@@ -67,15 +76,18 @@ public final class Geometry {
                 gg = lerp(gg, 0.79f, sandT);
                 gb = lerp(gb, 0.60f, sandT);
 
-                // Snow on high ridges.
-                float snowT = Noise.smoothstep(12f, 18f, y);
-                gr = lerp(gr, 0.95f, snowT);
+                // Snow on the summits only. The band is broken up by noise so
+                // the snowline is ragged rather than a painted contour, and it
+                // hugs the peaks: the arena floor stays green.
+                float line = 40f + patch * 9f;
+                float snowT = Noise.smoothstep(line, line + 11f, y);
+                gr = lerp(gr, 0.96f, snowT);
                 gg = lerp(gg, 0.97f, snowT);
                 gb = lerp(gb, 1.00f, snowT);
 
                 // Gentle ambient occlusion in the valleys -- kept light so the
                 // shadow side stays blue rather than going black.
-                float ao = Noise.clamp01(0.90f + 0.14f * Noise.smoothstep(-2f, 7f, y));
+                float ao = Noise.clamp01(0.74f + 0.30f * Noise.smoothstep(-2f, 30f, y));
                 gr *= ao;
                 gg *= ao;
                 gb *= ao;
@@ -92,6 +104,103 @@ public final class Geometry {
                 int i3 = i2 + 1;
                 b.addTriangle(i0, i2, i1);
                 b.addTriangle(i1, i2, i3);
+            }
+        }
+        return b.build();
+    }
+
+    // ------------------------------------------------------------- mountains
+
+    /**
+     * A distant mountain range built as a ring of individual peaks.
+     *
+     * <p>This is the backdrop the player sees over the rim of the map. The
+     * terrain itself climbs to ~68 m at the edges, but from inside the bowl that
+     * reads as one hazy wall; a range of separate, sharp peaks behind it gives
+     * the horizon the layered silhouette that makes the view look like a place
+     * instead of a bowl. It follows the camera in X/Z (see the renderer), so a
+     * single ring is all that is ever needed: it is far enough away (400 m+) to
+     * have no parallax worth modelling.</p>
+     *
+     * <p>Each peak is a low-poly cone with a noisy radius profile, a displaced
+     * rim and a snow band painted into the vertex colours. Peaks inside the ring
+     * fade towards the fog colour so the range reads as several hazy layers.</p>
+     */
+    public static MeshData mountainRange(float radius, float baseHeight, int count,
+                                         long seed, float radiusSpread) {
+        MeshData.Builder b = new MeshData.Builder();
+        java.util.Random r = new java.util.Random(seed);
+        float[] fog = {0.62f, 0.72f, 0.86f};
+
+        for (int k = 0; k < count; k++) {
+            // Spread unevenly round the ring so no two peaks line up.
+            double ang = (k * Math.PI * 2.0 / count) + (r.nextDouble() - 0.5) * 0.42;
+            float dist = radius + (r.nextFloat() - 0.5f) * radiusSpread;
+            float cx = (float) Math.cos(ang) * dist;
+            float cz = (float) Math.sin(ang) * dist;
+            float h = baseHeight * (0.70f + r.nextFloat() * 0.60f);
+            // Base width against height. Too narrow and the range reads as
+            // teeth; too wide and it flattens into a mound. Roughly 2:1 works.
+            float w = h * (0.40f + r.nextFloat() * 0.26f);
+
+            // How far back this peak sits: 0 = nearest ring, 1 = furthest.
+            float back = Noise.clamp01((dist - radius + radiusSpread * 0.5f)
+                    / Math.max(radiusSpread, 0.001f));
+            // Nearer peaks are darker and sharper; far ones dissolve into haze.
+            float haze = 0.10f + 0.42f * back;
+
+            int sides = 5 + r.nextInt(3);
+            float[] jitter = new float[sides];
+            for (int i = 0; i < sides; i++) {
+                jitter[i] = 0.78f + r.nextFloat() * 0.44f;
+            }
+            // A slightly off-centre apex gives the classic asymmetric peak.
+            float apexX = cx + (r.nextFloat() - 0.5f) * w * 0.22f;
+            float apexZ = cz + (r.nextFloat() - 0.5f) * w * 0.22f;
+            float snowline = h * (0.64f + r.nextFloat() * 0.14f);
+
+            int base = b.vertexCount();
+            for (int i = 0; i < sides; i++) {
+                double a = i * Math.PI * 2.0 / sides;
+                float rx = (float) Math.cos(a) * w * jitter[i];
+                float rz = (float) Math.sin(a) * w * jitter[i];
+                float x = cx + rx;
+                float z = cz + rz;
+
+                // Rock colour: deep cool slate, hazed towards the sky by
+                // distance. The near range stays dark enough to silhouette
+                // against the sky; only the back layer goes properly pale.
+                float rockR = Noise.lerp(0.13f, 0.40f, back);
+                float rockG = Noise.lerp(0.15f, 0.46f, back);
+                float rockB = Noise.lerp(0.23f, 0.60f, back);
+                float cr = Noise.lerp(rockR, fog[0], haze);
+                float cg = Noise.lerp(rockG, fog[1], haze);
+                float cb = Noise.lerp(rockB, fog[2], haze);
+                Vec3 n = new Vec3(rx, w * 0.55f, rz).normalized();
+                b.addVertex(x, -2f, z, n.x, n.y, n.z, cr, cg, cb, 1f, 0f);
+
+                // Snow cap ring: same rim, lifted to the snowline.
+                float capR = rx * 0.42f;
+                float capZ = rz * 0.42f;
+                float sc = 0.84f + r.nextFloat() * 0.08f;
+                b.addVertex(cx + capR, snowline, cz + capZ,
+                        n.x, n.y, n.z, sc, sc, Noise.clamp01(sc + 0.06f), 1f, 0f);
+            }
+            // Apex, white.
+            b.addVertex(apexX, h, apexZ, 0f, 1f, 0f, 0.97f, 0.98f, 1f, 1f, 0f);
+
+            int apexIndex = base + sides * 2;
+            for (int i = 0; i < sides; i++) {
+                int nxt = (i + 1) % sides;
+                int b0 = base + i * 2;
+                int b1 = base + nxt * 2;
+                int c0 = b0 + 1;
+                int c1 = b1 + 1;
+                // Lower rock face.
+                b.addTriangle(b0, c0, b1);
+                b.addTriangle(b1, c0, c1);
+                // Snow pyramid on top.
+                b.addTriangle(c0, apexIndex, c1);
             }
         }
         return b.build();
