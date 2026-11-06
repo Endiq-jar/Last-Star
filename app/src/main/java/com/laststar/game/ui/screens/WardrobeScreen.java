@@ -34,6 +34,8 @@ public final class WardrobeScreen implements Screen {
     private final float[] bodyPress = new float[4];
     private final float[] chipPress = new float[5];
     private float equipPress;
+    /** Which chip is selected; cosmetic only, the swatch panel is shared. */
+    private int activeChip;
     private float time;
 
     @Override
@@ -140,15 +142,15 @@ public final class WardrobeScreen implements Screen {
         }
 
         // ---- swatch panel ----
-        float px = w * 0.545f;
-        float py = h * 0.190f;
-        float pw = w * 0.285f;
-        float ph = h * 0.530f;
+        float px = w * PANEL_X;
+        float py = h * PANEL_Y;
+        float pw = w * PANEL_W;
+        float ph = h * PANEL_H;
         GenshinKit.panel(b, px, py, pw, ph, alpha);
 
-        float gridPad = 12f;
+        float gridPad = GRID_PAD;
         float cellW = (pw - gridPad * 2f) / 4f;
-        float gridTop = py + 32f;
+        float gridTop = py + GRID_TOP;
         for (int i = 0; i < SWATCHES.length; i++) {
             int col = i % 4;
             int row = i / 4;
@@ -172,24 +174,16 @@ public final class WardrobeScreen implements Screen {
             }
         }
 
-        // Header chips: HAIR / LIPS / FACE plus a locked fourth slot. Widths are
-        // measured from the glyph advance so nothing is clipped.
+        // Header chips. These used to be lozenges, but a four-letter word in a
+        // pointed lozenge loses its first and last glyph at any width that fits
+        // four chips across the panel. Text on a hairline gold rule reads better
+        // and needs no padding: the marker and rule are drawn first, then the
+        // label sits on top of them.
         String[] chips = {"HAIR", "LIPS", "FACE"};
-        float chipY = py + 17f;
-        float textY = chipY - font.capHeight(1) * 0.5f;
-        float cursor = px + 10f;
         for (int i = 0; i < chips.length; i++) {
-            float textW = UiBatch.textSpacedWidth(chips[i], font, 1, 1.2f);
-            float chipW = textW + 18f;
-            float chx = cursor + chipW * 0.5f;
-            GenshinKit.lozenge(b, chx, chipY, chipW, 17f, false, chipPress[i], alpha * 0.95f);
-            b.textSpacedCentred(chips[i], chx, textY, 1, 1.2f,
-                    Style.CREAM[0], Style.CREAM[1], Style.CREAM[2], alpha, font);
-            cursor += chipW + 4f;
+            drawChip(b, font, chips[i], px, pw, py, i, alpha);
         }
-        float lockW = 26f;
-        GenshinKit.lozenge(b, cursor + lockW * 0.5f, chipY, lockW, 17f, false, 0f, alpha * 0.55f);
-        GenshinKit.padlock(b, cursor + lockW * 0.5f, chipY, 7.5f, alpha * 0.8f);
+        drawLockChip(b, px, pw, py, alpha);
 
         // ---- equip ----
         float ex = px + pw * 0.5f;
@@ -197,6 +191,82 @@ public final class WardrobeScreen implements Screen {
         GenshinKit.lozenge(b, ex, ey, 112f, 27f, true, equipPress, alpha);
         b.textSpacedCentred("EQUIP", ex, ey - font.capHeight(1) * 0.5f, 1, 2.6f,
                 Style.IVORY[0], Style.IVORY[1], Style.IVORY[2], alpha, font);
+    }
+
+    /** Chip geometry, shared by drawing and hit-testing so taps land on the label. */
+    private static float chipCentreX(float px, float pw, int index) {
+        return px + chipRowLeft(pw) + index * CHIP_PITCH + CHIP_W * 0.5f;
+    }
+
+    /** Left edge of the chip row, relative to the panel's left edge. */
+    private static float chipRowLeft(float pw) {
+        return (pw - CHIP_ROW_W) * 0.5f;
+    }
+
+    // Panel geometry. Draw and hit-test both read these, so a tap target can
+    // never drift away from the thing it looks like it belongs to.
+    private static final float PANEL_X = 0.545f;
+    private static final float PANEL_Y = 0.180f;
+    private static final float PANEL_W = 0.285f;
+    private static final float PANEL_H = 0.565f;
+    private static final float GRID_PAD = 12f;
+    /** Below the chip row, which owns the top strip of the panel. */
+    private static final float GRID_TOP = 50f;
+    /** Label top and rule line, measured down from the panel's top edge. */
+    private static final float CHIP_LABEL_Y = 14f;
+    private static final float CHIP_RULE_Y = 34f;
+    private static final float CHIP_HIT_Y = 24f;
+    private static final float CHIP_HIT_HALF = 18f;
+
+    private static final float CHIP_W = 38f;
+    private static final float CHIP_PITCH = 47f;
+    private static final float CHIP_ROW_W = CHIP_PITCH * 4f;
+    private static final float PADLOCK_W = 22f;
+
+    /**
+     * One chip: a hairline gold rule with a diamond marker at its centre and the
+     * label sitting just above the rule. The selected chip's label is ivory and
+     * its marker is filled; the others are dimmed cream.
+     */
+    private void drawChip(UiBatch b, AtlasFont font, String label, float px, float pw,
+                          float py, int index, float alpha) {
+        boolean sel = index == activeChip;
+        float cx = chipCentreX(px, pw, index);
+        float ruleY = py + CHIP_RULE_Y;
+        float press = chipPress[index];
+        float glow = sel ? 1f : 0.35f + press * 0.4f;
+
+        b.quad(cx - CHIP_W * 0.5f, ruleY, CHIP_W, 0.8f,
+                Style.GOLD[0], Style.GOLD[1], Style.GOLD[2], alpha * (0.35f + 0.5f * glow));
+        if (sel) {
+            // A short brighter underline under the active chip.
+            b.quad(cx - CHIP_W * 0.34f, ruleY - 0.9f, CHIP_W * 0.68f, 2.0f,
+                    Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1], Style.GOLD_LIGHT[2], alpha);
+            b.glow(cx, ruleY + 2f, CHIP_W * 0.42f, 14,
+                    Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1], Style.GOLD_LIGHT[2], 0.16f * alpha);
+        }
+
+        // Diamond marker sitting on the rule, filled for the active chip.
+        float d = sel ? 3.8f : 2.7f;
+        b.polygon(new float[]{
+                cx, ruleY - d,
+                cx + d, ruleY,
+                cx, ruleY + d,
+                cx - d, ruleY
+        }, Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1], Style.GOLD_LIGHT[2], alpha * glow);
+
+        float[] ink = sel ? Style.IVORY : Style.CREAM_DIM;
+        b.textSpacedCentred(label, cx, py + CHIP_LABEL_Y, 1, 0f,
+                ink[0], ink[1], ink[2], alpha * (sel ? 1f : 0.85f), font);
+    }
+
+    /** The locked fourth slot: a hatched padlock chip with no label. */
+    private void drawLockChip(UiBatch b, float px, float pw, float py, float alpha) {
+        float cx = chipCentreX(px, pw, 3);
+        float ruleY = py + CHIP_RULE_Y;
+        b.quad(cx - PADLOCK_W * 0.5f, ruleY, PADLOCK_W, 0.8f,
+                Style.GOLD[0], Style.GOLD[1], Style.GOLD[2], alpha * 0.3f);
+        GenshinKit.padlock(b, cx, py + CHIP_LABEL_Y + 10f, 7.5f, alpha * 0.5f);
     }
 
     /** The lit ring the character stands on. */
@@ -321,12 +391,13 @@ public final class WardrobeScreen implements Screen {
             }
         }
         // Swatches.
-        float px = w * 0.545f;
-        float py = h * 0.235f;
-        float pw = w * 0.285f;
-        float gridPad = 12f;
+        float px = w * PANEL_X;
+        float py = h * PANEL_Y;
+        float pw = w * PANEL_W;
+        float ph = h * PANEL_H;
+        float gridPad = GRID_PAD;
         float cellW = (pw - gridPad * 2f) / 4f;
-        float gridTop = py + 32f;
+        float gridTop = py + GRID_TOP;
         for (int i = 0; i < SWATCHES.length; i++) {
             int col = i % 4;
             int row = i / 4;
@@ -337,15 +408,13 @@ public final class WardrobeScreen implements Screen {
                 return Action.NONE;
             }
         }
-        // Chips.
-        float ph = h * 0.525f;
-        String[] chips = {"HAIR", "LIPS", "FACE"};
-        float chipY = py + ph - 20f;
-        float chipW = (pw - gridPad * 2f - 24f) / 4.35f;
-        for (int i = 0; i < chips.length; i++) {
-            float chx = px + gridPad + i * (chipW + 8f) + chipW * 0.5f;
-            if (Math.abs(x - chx) < chipW * 0.5f && Math.abs(y - chipY) < 14f) {
+        // Chips: same geometry as drawChip, so the tap target is the label.
+        for (int i = 0; i < 3; i++) {
+            float chx = chipCentreX(px, pw, i);
+            if (Math.abs(x - chx) < CHIP_PITCH * 0.5f
+                    && Math.abs(y - (py + CHIP_HIT_Y)) < CHIP_HIT_HALF) {
                 chipPress[i] = 1f;
+                activeChip = i;
                 return Action.NONE;
             }
         }
