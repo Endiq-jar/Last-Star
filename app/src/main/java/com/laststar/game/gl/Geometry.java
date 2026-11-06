@@ -145,6 +145,26 @@ public final class Geometry {
      * rim and a snow band painted into the vertex colours. Peaks inside the ring
      * fade towards the fog colour so the range reads as several hazy layers.</p>
      */
+    /**
+     * Layered ranges: three concentric bands of peaks at different distances,
+     * heights and haze levels.
+     *
+     * <p>One ring of peaks reads as a row of cones pasted on the horizon. Real
+     * ranges are seen as overlapping ridgelines: near silhouettes are dark and
+     * tall, far ones pale and low, and the eye reads the depth from the number
+     * of those bands. This builds the three bands into one mesh with a shared
+     * seed, so the whole backdrop is still a single draw call.</p>
+     */
+    public static MeshData layeredRange(float radius, float baseHeight, int count,
+                                        long seed, float radiusSpread) {
+        MeshData near = mountainRange(radius, baseHeight, count, seed, radiusSpread);
+        MeshData mid = mountainRange(radius * 1.32f, baseHeight * 0.82f,
+                (count * 2) / 3, seed ^ 0x9E37L, radiusSpread * 1.4f);
+        MeshData far = mountainRange(radius * 1.75f, baseHeight * 0.62f,
+                count / 2, seed ^ 0x51EDL, radiusSpread * 1.9f);
+        return MeshData.merge(near, mid, far);
+    }
+
     public static MeshData mountainRange(float radius, float baseHeight, int count,
                                          long seed, float radiusSpread) {
         MeshData.Builder b = new MeshData.Builder();

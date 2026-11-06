@@ -241,7 +241,7 @@ public final class ScreenshotTool {
 
         // Distant range: the same ring the renderer builds, centred on the
         // camera, so the horizon matches the APK.
-        MeshData range = Geometry.mountainRange(520f, 96f, 56,
+        MeshData range = Geometry.layeredRange(520f, 96f, 56,
                 world.worldSeed ^ 0x5A5A5A5AL, 230f);
         Mat4 rangMat = new Mat4();
         rangMat.m[12] = cam.position.x;

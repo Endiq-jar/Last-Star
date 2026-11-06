@@ -95,7 +95,7 @@ public final class SceneRenderer {
         ringMesh = toMesh(Geometry.groundRing(1f, 0.12f, 28, 1f, 1f, 1f, 1f));
         cubeMesh = toMesh(Geometry.box(1f, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 0f, 0f));
 
-        mountainMesh = toMesh(Geometry.mountainRange(520f, 96f, 56, world.worldSeed ^ 0x5A5A5A5AL, 230f));
+        mountainMesh = toMesh(Geometry.layeredRange(520f, 96f, 56, world.worldSeed ^ 0x5A5A5A5AL, 230f));
 
         loadModels(world, assets);
 
