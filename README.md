@@ -5,7 +5,7 @@ repository**, no Unity, no Gradle, no Android Studio required.
 
 [![APK](https://img.shields.io/badge/APK-last--star--1.0.0.apk-2ea44f)](apk/last-star-1.0.0.apk)
 [![minSdk](https://img.shields.io/badge/minSdk-21%20(Android%205.0)-blue)]()
-[![size](https://img.shields.io/badge/size-289%20KiB-informational)]()
+[![size](https://img.shields.io/badge/size-462%20KiB-informational)]()
 [![tests](https://img.shields.io/badge/headless%20checks-13%2C562%20passing-brightgreen)]()
 [![licence](https://img.shields.io/badge/licence-EPL--2.0-lightgrey)](LICENSE)
 
@@ -26,9 +26,9 @@ repository**, no Unity, no Gradle, no Android Studio required.
 3. Launch **Last Star**. Hold the phone in landscape.
 
 Works on **every Android device since Android 5.0 (API 21)** — 32-bit, 64-bit,
-ARM and x86. No permissions at all: no internet, no ads, no analytics, ~290 KiB.
+ARM and x86. No permissions at all: no internet, no ads, no analytics, ~462 KiB.
 Signed with APK schemes v1 + v2 + v3
-(SHA-256 `be17c7da78b93150f5309c54f857a87b6b3d3fc3dbe6eb30d4c69ad97e9ccf31`).
+(SHA-256 `ef184281b4e4bec3cc0ebbd0534dd1e3cc4d009fa155a48fd222e18001f3f7bd`).
 
 ### Controls
 
@@ -83,7 +83,10 @@ progress — and every second shard heals you and raises your maximum health.
 Clear all six to restore the sky, then begin the next, harder night.
 
 * Procedurally generated 220 m × 220 m island: rolling hills, ridged mountains, a
-  lake with sand shoreline, snow on the peaks, scattered trees and monoliths
+  lake with sand shoreline, snow on the peaks — dressed with **84 imported CC0
+  models** (7,000+ trees, rocks, bushes, grass and flowers; cliff ridges; a
+  castle gatehouse, a courtyard with towers, a camp and a watchtower), distance
+  culled per model so the draw count stays low while the map looks full
 * Six shards, five+ Wardens (more each level) with telegraph → swing → recover
   melee AI, aggro, leashing, stagger and health regeneration
 * Third-person orbit camera with terrain-aware pull-in, camera-relative
@@ -98,6 +101,46 @@ Clear all six to restore the sky, then begin the next, harder night.
 ![Night falls as shards are recovered](docs/screenshots/05-night.png)
 ![Combat](docs/screenshots/03-combat.png)
 ![Collecting a shard](docs/screenshots/04-shard.png)
+
+---
+
+## The imported model set
+
+The assets that came with this pass are **CC0 Kenney kits** — Nature, Fantasy
+Town, Castle and Survival — pulled from the CC0 mirror
+[`shorepine/kenney`](https://github.com/shorepine/kenney), baked into one asset
+and used *everywhere* in the world, not in a single showcase corner.
+
+![The imported model set](docs/ui/models.png)
+
+`tools/fetch_models.sh` downloads the source glTF files, `tools/bake_models.py`
+flattens, re-tints, scales and packs them, and `ModelLibrary` / `PropPlanner`
+place them:
+
+| Landmark | What it is |
+|---|---|
+| **Castle gate** | Two towers with roofs and banners, a gatehouse arch and a curtain wall on the highest ridge |
+| **Courtyard** | A twelve-segment ring wall, hex towers, a path circle, a tent, a fire, barrels and a chest |
+| **Camp** | Tents, fire, log seats, a barrel, a crate, a chest, a bucket and a fence gate |
+| **Watchtower** | A tower, roof, banner and doorway, with a half-collapsed ruin beside it |
+
+Everything else is scattered by role: 380 trees, 210 rocks, 760 plants, 2,200
+grass tufts, 900 flowers, 260 mushrooms, 110 logs, 55 stumps, 150 cliff blocks
+and 24 hills, on a grid that keeps landmark clearings and the player's path open.
+Per-role draw distances (grass 30 m … cliffs 200 m) keep the frame cheap: the
+world is dressed with thousands of props, but only what is near you is drawn.
+
+Colour and scale are normalised at bake time so the imported art reads as part
+of the same Genshin-like palette as the procedural terrain. Full attribution and
+the licence notes are in [`CREDITS.md`](CREDITS.md).
+
+### Continuous integration
+
+[`.github/workflows/android-ci.yml`](.github/workflows/android-ci.yml) runs on
+**every push to every branch** and on `workflow_dispatch`: it fetches the
+toolchain from npm and PyPI, compiles all sources, runs the 13,562 headless
+checks, builds and signs the APK, asserts `assets/models/world.bin` is packaged,
+and uploads the APK as a build artefact.
 
 ---
 
@@ -158,7 +201,7 @@ tools/fetch_toolchain.sh && source tools/.toolchain/env.sh
 tools/build_apk.sh
 # BUILD OK
 #   apk      : apk/last-star-1.0.0.apk
-#   size     : 289 KiB
+#   size     : 461 KiB
 #   minSdk   : 21
 ```
 
@@ -200,15 +243,19 @@ app/src/main/java/            ← the game (44 classes, ~9,600 lines)
   com/laststar/game/
     core/     Vec3, Mat4, Noise, Terrain, Camera     (pure maths / world)
     world/    World, Player, Enemy, Shard, Pickup…   (pure simulation)
-    gl/       SceneRenderer, Geometry, Shaders, Mesh (OpenGL ES 2.0)
+    gl/       SceneRenderer, Geometry, Shaders, Mesh,
+              ModelLibrary, PropPlanner (OpenGL ES 2.0)
     art/      HumanoidRig (procedural characters)
     ui/       Menu, screens/, GenshinKit, Backdrop, TabBar, Style,
               UiBatch, UiRenderer, AtlasFont, Font, VectorFont, Hud, TouchControls
     audio/    SoundFx (procedural PCM synthesis)
     Prefs.java                                        (settings, best runs)
+app/src/main/assets/models/   ← world.bin, the baked CC0 prop set
 desktop/                      ← headless tests + software renderer
-tools/                        ← build, test, toolchain fetch, zipalign, icons
+tools/                        ← build, test, toolchain fetch, zipalign, icons,
+                                model download + bake, contact sheet
 docs/                         ← BUILD.md, screenshots, ui/ (menu shots), icon
+docs/ui/models.png            ← contact sheet of the imported models
 upstream/                     ← the three repositories + their licences
 ```
 
