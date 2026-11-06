@@ -31,3 +31,6 @@ tools/.toolchain/
 # Python bytecode from the tooling scripts
 tools/__pycache__/
 __pycache__/
+
+# Large third-party art archives: keep them out of history.
+assets_src/
