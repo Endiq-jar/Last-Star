@@ -23,22 +23,22 @@ jobs:
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           # The tooling scripts are plain Python 3, no third-party packages.
           python-version: '3.11'
 
       - name: Cache the fetched toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: tools/.toolchain
           key: toolchain-${{ runner.os }}-v1
@@ -77,7 +77,7 @@ jobs:
           echo "APK: $apk ($(stat -c%s "$apk") bytes)"
 
       - name: Upload the APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: last-star-apk
           path: apk/*.apk
