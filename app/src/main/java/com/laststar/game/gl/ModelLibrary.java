@@ -114,7 +114,7 @@ public final class ModelLibrary {
         // The software rasteriser behind the docs screenshots consumes plain
         // arrays. The device never calls these, so the copies are lazy.
 
-        private float[] posArray, nrmArray, colArray;
+        private float[] posArray, nrmArray, colArray, wavArray;
         private short[] idxArray;
 
         public float[] positionArray() {
@@ -136,6 +136,19 @@ public final class ModelLibrary {
                 colArray = floats(mesh.colors, mesh.vertexCount * 4);
             }
             return colArray;
+        }
+
+        public float[] waveArray() {
+            if (mesh.waves == null) {
+                return null;
+            }
+            if (wavArray == null) {
+                wavArray = new float[mesh.vertexCount];
+                for (int i = 0; i < wavArray.length; i++) {
+                    wavArray[i] = mesh.waves.get(i);
+                }
+            }
+            return wavArray;
         }
 
         public short[] indexArray() {
@@ -276,6 +289,10 @@ public final class ModelLibrary {
             float maxY = buf.getFloat();
             float maxZ = buf.getFloat();
 
+            // The bake interleaves nine floats per vertex: position, normal,
+            // then an RGB colour. Read them in one pass, then derive the wind
+            // phase from the heights that pass just measured -- the root of a
+            // blade or a trunk stays planted while the tip bends.
             FloatBuffer positions = direct(vertexCount * 12).asFloatBuffer();
             FloatBuffer normals = direct(vertexCount * 12).asFloatBuffer();
             FloatBuffer colors = direct(vertexCount * 16).asFloatBuffer();
@@ -288,13 +305,25 @@ public final class ModelLibrary {
             normals.position(0);
             colors.position(0);
 
+            FloatBuffer waves = direct(vertexCount * 4).asFloatBuffer();
+            float span = Math.max(0.0001f, maxY - minY);
+            float topWeight = role == GRASS || role == FLOWER || role == PLANT
+                    || role == MUSHROOM ? 1f : (role == TREE ? 0.22f : 0f);
+            for (int v = 0; v < vertexCount; v++) {
+                float h = (positions.get(v * 3 + 1) - minY) / span;
+                // Only the upper part of the mesh moves, and it moves together:
+                // one phase per model keeps the tuft coherent.
+                waves.put(topWeight * h * h);
+            }
+            waves.position(0);
+
             ShortBuffer indices = direct(indexCount * 2).asShortBuffer();
             for (int v = 0; v < indexCount; v++) {
                 indices.put(buf.getShort());
             }
             indices.position(0);
 
-            Mesh mesh = Mesh.fromBuffers(positions, normals, colors, null,
+            Mesh mesh = Mesh.fromBuffers(positions, normals, colors, waves,
                     indices, vertexCount, indexCount);
             models[i] = new Model(i, name, role, targetSize,
                     minX, minY, minZ, maxX, maxY, maxZ, mesh);

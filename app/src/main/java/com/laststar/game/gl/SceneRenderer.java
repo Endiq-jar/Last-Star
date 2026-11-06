@@ -288,6 +288,29 @@ public final class SceneRenderer {
             }
         }
         sceneProgram.setTintAmount(0f);
+        sceneProgram.setFloat("uWaveAmp", 0f);
+    }
+
+    /**
+     * Wind amplitude per model, in metres. Written to {@code uWaveAmp}, which
+     * bends the mesh tip in the vertex shader; anything without grass or leaves
+     * gets zero so rocks and buildings stay rigid.
+     */
+    private float swayFor(int modelIndex) {
+        switch (models.get(modelIndex).role) {
+            case ModelLibrary.GRASS:
+                return 0.075f;
+            case ModelLibrary.FLOWER:
+                return 0.060f;
+            case ModelLibrary.PLANT:
+                return 0.045f;
+            case ModelLibrary.MUSHROOM:
+                return 0.022f;
+            case ModelLibrary.TREE:
+                return 0.018f;
+            default:
+                return 0f;
+        }
     }
 
     /** Per-role draw distance in metres, relative to the camera. */
@@ -334,6 +357,9 @@ public final class SceneRenderer {
         } else {
             sceneProgram.setTintAmount(0f);
         }
+        // Ground cover sways; timber and stone do not. This is the whole
+        // difference between a painted meadow and a flat green carpet.
+        sceneProgram.setFloat("uWaveAmp", swayFor(in.model));
         drawMesh(propMeshes[in.model]);
     }
 

@@ -249,6 +249,9 @@ public final class ScreenshotTool {
         raster.drawMesh(range.positions, range.normals, range.colors, range.indices,
                 rangMat, 1f, 0.06f, null, 0f);
 
+        // Wind, matching the amplitudes SceneRenderer.swayFor uses.
+        raster.setWind(world.worldTime + extraTime, 0.055f);
+
         // Set dressing: exactly the plan the renderer uses.
         if (MODELS != null) {
             PropPlanner props = new PropPlanner(MODELS, world.terrain, 20261105L);
@@ -361,6 +364,9 @@ public final class ScreenshotTool {
         }
         float[] tint = in.tintAmount > 0f
                 ? new float[]{in.tintR, in.tintG, in.tintB} : null;
+        // Feed the wind phase so foliage bends exactly as the vertex shader
+        // bends it on the device.
+        raster.setWaveAttribute(m.waveArray());
         raster.drawMesh(m.positionArray(), m.normalArray(), m.colorArray(), m.indexArray(),
                 model, 1f, 0f, tint, in.tintAmount);
     }

@@ -70,6 +70,14 @@ public final class Raster {
     }
 
     private float sunR = 1f;
+    private float waveTime = 0f;
+    private float waveAmp = 0f;
+
+    /** Enables the wind bend used by grass, flowers and foliage. */
+    public void setWind(float time, float amp) {
+        waveTime = time;
+        waveAmp = amp;
+    }
     private float sunG = 0.9f;
     private float sunB = 0.75f;
 
@@ -271,12 +279,30 @@ public final class Raster {
         }
     }
 
+    /** Per-vertex wave phase, set alongside the mesh buffers. */
+    private float[] wv = new float[0];
+
+    /** Supplies the per-vertex wave phase used by {@link #setWind}. */
+    public void setWaveAttribute(float[] wave) {
+        wv = wave == null ? new float[0] : wave;
+    }
+
     private V vertex(Mat4 m, float[] pos, float[] nrm, float[] col, int i,
                      float alpha, float emissive, float[] tint, float tintAmount) {
         V v = new V();
         float x = pos[i * 3];
         float y = pos[i * 3 + 1];
         float z = pos[i * 3 + 2];
+        if (waveAmp > 0f) {
+            // Mirrors the vertex shader's wave term. The attribute is the
+            // phase, carried per vertex by Geometry.tuft and the model baker.
+            float phase = wv[i < wv.length ? i : 0];
+            if (phase != 0f) {
+                y += (float) (Math.sin(waveTime * 1.35f + phase)
+                        + Math.sin(waveTime * 0.71f + phase * 1.7f) * 0.55f) * waveAmp;
+                x += (float) Math.cos(waveTime * 0.9f + phase * 0.8f) * waveAmp * 0.35f;
+            }
+        }
         v.x = m.m[0] * x + m.m[4] * y + m.m[8] * z + m.m[12];
         v.y = m.m[1] * x + m.m[5] * y + m.m[9] * z + m.m[13];
         v.z = m.m[2] * x + m.m[6] * y + m.m[10] * z + m.m[14];

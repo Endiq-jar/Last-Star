@@ -236,6 +236,56 @@ public final class Geometry {
         return b.build();
     }
 
+    // ------------------------------------------------------------ grass tufts
+
+    /**
+     * Wind-pushed grass and flower tufts, generated as a handful of crossed
+     * blades.
+     *
+     * <p>Anime fields read as movement as much as colour: the sway is what
+     * stops a painted meadow looking like green carpet. Each blade is two
+     * triangles with the wave weight baked into the vertex attribute, so the
+     * vertex shader can bend the tip while the root stays planted -- no bones,
+     * no skinning, no per-frame CPU work.</p>
+     *
+     * @param blades  number of crossed blades per tuft
+     * @param height  blade height in metres
+     * @param spread  horizontal radius of the tuft
+     * @param r,g,b   base colour at the root
+     * @param tipR,tipG,tipB colour at the tip (anime grass always lightens)
+     */
+    public static MeshData tuft(int blades, float height, float spread,
+                                float r, float g, float b,
+                                float tipR, float tipG, float tipB, long seed) {
+        MeshData.Builder bb = new MeshData.Builder();
+        java.util.Random rnd = new java.util.Random(seed);
+        for (int i = 0; i < blades; i++) {
+            double ang = (i / (double) blades) * Math.PI + rnd.nextDouble() * 0.5;
+            float cx = (float) Math.cos(ang);
+            float cz = (float) Math.sin(ang);
+            float px = -cz;
+            float pz = cx;
+            float w = spread * (0.16f + rnd.nextFloat() * 0.10f);
+            float h = height * (0.72f + rnd.nextFloat() * 0.55f);
+            float ox = (rnd.nextFloat() - 0.5f) * spread * 0.45f;
+            float oz = (rnd.nextFloat() - 0.5f) * spread * 0.45f;
+            // A gentle lean, so the tuft is not perfectly vertical.
+            float leanX = (rnd.nextFloat() - 0.5f) * height * 0.28f;
+            float leanZ = (rnd.nextFloat() - 0.5f) * height * 0.28f;
+            float phase = rnd.nextFloat() * 6.283f;
+            // Slight outward bow, which reads as volume from any angle.
+            float bow = spread * 0.30f;
+
+            int base = bb.vertexCount();
+            bb.addVertex(ox - px * w, 0f, oz - pz * w, px, 0.35f, pz, r, g, b, 1f, 0f);
+            bb.addVertex(ox + px * w, 0f, oz + pz * w, -px, 0.35f, -pz, r, g, b, 1f, 0f);
+            bb.addVertex(ox + cx * bow + leanX, h, oz + cz * bow + leanZ,
+                    cx, 0.8f, cz, tipR, tipG, tipB, 1f, phase);
+            bb.addTriangle(base, base + 1, base + 2);
+        }
+        return bb.build();
+    }
+
     // ----------------------------------------------------------------- water
 
     /** Flat plane subdivided so the vertex shader can ripple it. */
