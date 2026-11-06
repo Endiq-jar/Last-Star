@@ -27,3 +27,7 @@ UserSettings/
 
 # toolchain fetched by tools/fetch_toolchain.sh (large, machine specific)
 tools/.toolchain/
+
+# Python bytecode from the tooling scripts
+tools/__pycache__/
+__pycache__/
