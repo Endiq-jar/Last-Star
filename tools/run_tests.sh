@@ -51,6 +51,7 @@ echo "==> verifying the real GL start-up path (shaders, renderer, one frame)"
 
 echo "==> verifying the FBX import path"
 python3 "$ROOT/tools/tests/test_fbx_import.py"
+python3 "$ROOT/tools/tests/test_mesh_text.py"
 
 echo "==> running headless verification"
 "$JAVA_BIN" -cp "$OUT" HeadlessTest

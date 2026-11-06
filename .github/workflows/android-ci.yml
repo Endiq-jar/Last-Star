@@ -72,6 +72,7 @@ jobs:
 
       - name: Verify the FBX import path
         run: python3 tools/tests/test_fbx_import.py
+          && python3 tools/tests/test_mesh_text.py
 
       - name: Run the headless verification suite
         run: |
