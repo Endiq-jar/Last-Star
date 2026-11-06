@@ -37,6 +37,23 @@ the game instead of fighting it:
 
 ## Mountains
 
+**The Holotna "Mountain – Stylized Fantasy Environment" pack could not be
+imported.** `assetstore.unity.com` and `holotna.com` are both unreachable from
+the build environment (no DNS route), GitHub hosts no repository by that name,
+and the projects that mention it in their docs contain text references only —
+no meshes. It is also a paid, account-gated Asset Store licence, so even a
+reachable copy would not be redistributable into this repository.
+
+What ships instead is built from assets already licensed here:
+
+* **14 rock spires inside the map**, assembled from the imported Kenney cliff
+  and rock models — a broad skirt at the base, then progressively smaller,
+  taller blocks stacked on top, with a pale "snow" tint creeping down from the
+  summit. These are real props placed by `PropPlanner.buildPeaks`, walkable-up
+  and visible from anywhere on the map.
+* **A 56-peak range on the horizon**, generated in `Geometry.mountainRange`.
+
+
 The distant snow-capped range on the horizon is **not** an imported asset — no
 CC0 mountain kit was available from a reachable source (Kenney publishes no
 mountain kit, and the linked Unity Asset Store / Holotna packs are both licence
