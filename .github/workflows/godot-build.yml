@@ -120,7 +120,11 @@ jobs:
             exit 1
           fi
           cat "$RUNNER_TEMP/godot-export.log"
-          test -s builds/android/LastStar-debug.apk
+          if [[ ! -s builds/android/LastStar-debug.apk ]]; then
+            echo "::error::Godot returned without creating a non-empty APK at builds/android/LastStar-debug.apk. Files under builds:"
+            find builds -maxdepth 4 -type f -printf '%p (%s bytes)\\n' || true
+            exit 1
+          fi
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
