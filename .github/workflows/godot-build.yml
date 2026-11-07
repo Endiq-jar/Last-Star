@@ -56,16 +56,13 @@ jobs:
           echo "$(dirname "$sdkmanager_bin")" >> "$GITHUB_PATH"
           "$sdkmanager_bin" --version
 
-      - name: Install Android platform and NDK packages
+      - name: Verify Android SDK packages
         shell: bash
         run: |
           set -eu
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0" \
-            "ndk;27.2.12479018"
+          test -d "$ANDROID_HOME/platforms/android-35"
+          test -d "$ANDROID_HOME/build-tools/35.0.0"
+          test -d "$ANDROID_HOME/ndk/27.3.13750724"
 
       - name: Download Godot and Android export templates
         shell: bash
