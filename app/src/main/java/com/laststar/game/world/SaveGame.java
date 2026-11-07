@@ -29,7 +29,7 @@ import java.util.zip.CRC32;
 public final class SaveGame {
 
     /** Current layout; older v2/v3 snapshots are migrated on read. */
-    public static final int VERSION = 4;
+    public static final int VERSION = 5;
     private static final int MAGIC = 0x4C535356;   // "LSSV"
 
     // --- what is saved -------------------------------------------------------
@@ -61,6 +61,8 @@ public final class SaveGame {
     public final int[] worn = {-1, -1, -1};
     /** Light capacity from progress alone, before equipment. */
     public float baseCapacity;
+    /** Simulation time, used to resume the same daylight/weather schedule. */
+    public float worldTime;
 
     private SaveGame() {
     }
@@ -78,6 +80,7 @@ public final class SaveGame {
         s.runsCompleted = world.runsCompleted;
         s.lightCapacity = world.spells.lightCapacity;
         s.baseCapacity = world.spells.baseLightCapacity();
+        s.worldTime = world.worldTime;
         s.playerX = world.player.position.x;
         s.playerY = world.player.position.y;
         s.playerZ = world.player.position.z;
@@ -162,6 +165,7 @@ public final class SaveGame {
                 out.writeInt(worn[i]);
             }
             out.writeFloat(baseCapacity);
+            out.writeFloat(worldTime);
             out.flush();
         } catch (IOException e) {
             // A ByteArrayOutputStream cannot fail; this is unreachable but the
@@ -197,11 +201,11 @@ public final class SaveGame {
             throw new IOException("not a Last Star save");
         }
         int version = header.readInt();
-        if (version != 2 && version != 3 && version != VERSION) {
-            throw new IOException("save version " + version + ", expected 2, 3 or " + VERSION);
+        if (version != 2 && version != 3 && version != 4 && version != VERSION) {
+            throw new IOException("unsupported save version " + version);
         }
         int payloadLength = data.length;
-        if (version == VERSION) {
+        if (version >= 4) {
             if (data.length < 12) {
                 throw new IOException("save checksum is missing");
             }
@@ -277,6 +281,7 @@ public final class SaveGame {
             s.worn[i] = in.readInt();
         }
         s.baseCapacity = in.readFloat();
+        s.worldTime = version >= 5 ? in.readFloat() : 0f;
         if (in.available() != 0) {
             throw new IOException("unexpected trailing save data");
         }
@@ -293,7 +298,7 @@ public final class SaveGame {
         if (!finite(lightCapacity) || lightCapacity < 0f
                 || !finite(baseCapacity) || baseCapacity < 0f
                 || !finite(playerX) || !finite(playerY) || !finite(playerZ)
-                || !finite(playerYaw)) {
+                || !finite(playerYaw) || !finite(worldTime) || worldTime < 0f) {
             throw new IOException("save contains invalid player values");
         }
         for (int i = 0; i < spellLevel.length; i++) {
@@ -342,6 +347,7 @@ public final class SaveGame {
         world.deaths = deaths;
         world.shardsCollected = shardsCollected;
         world.runsCompleted = runsCompleted;
+        world.worldTime = worldTime;
         world.restoreLevel(level);
         world.spells.lightCapacity = lightCapacity;
         world.spells.light = lightCapacity;

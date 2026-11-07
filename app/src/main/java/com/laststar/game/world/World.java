@@ -97,6 +97,7 @@ public final class World {
 
     public Phase phase = Phase.INTRO;
     public float phaseTimer;
+    /** In-game elapsed seconds; drives the persisted day/night cycle. */
     public float worldTime;
     public int shardsCollected;
     public int kills;

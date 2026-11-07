@@ -8,7 +8,7 @@ import android.view.View;
 
 import com.laststar.game.audio.SoundFx;
 import com.laststar.game.core.Camera;
-import com.laststar.game.core.Noise;
+import com.laststar.game.core.DayNightCycle;
 import com.laststar.game.gl.GlCapabilities;
 import com.laststar.game.gl.SceneRenderer;
 import com.laststar.game.ui.Hud;
@@ -59,7 +59,6 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
     private int screenH = 1;
     private boolean debugOverlay;
     private float nightAmount;
-    private float runTime;
 
     public GameSurface(Context context) {
         super(context);
@@ -236,8 +235,7 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
             return;
         }
 
-        runTime += dt;
-        nightAmount = Noise.clamp01(world.shardsCollected / (float) World.SHARD_COUNT);
+        nightAmount = DayNightCycle.nightAmount(world.worldTime);
         float aspect = (float) screenW / (float) screenH;
 
         camera.update(dt, world, null, world.shakeAmount);
@@ -324,7 +322,11 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
 
         // Camera-relative movement uses the camera's yaw.
         input.cameraYaw = camera.movementYaw();
+        float savedWorldClock = world.worldTime;
         world.update(dt, input);
+        // The title/menu view can keep its background simulation moving, but
+        // browsing menus must not consume in-world daylight.
+        if (inMenu) world.worldTime = savedWorldClock;
         camera.applyLook(input.lookX * 0.85f, input.lookY * 0.85f);
 
         // Audio cues derived from state changes.

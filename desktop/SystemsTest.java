@@ -1,4 +1,5 @@
 import com.laststar.game.core.Vec3;
+import com.laststar.game.core.DayNightCycle;
 import com.laststar.game.world.Boss;
 import com.laststar.game.world.CombatKit;
 import com.laststar.game.world.Enemy;
@@ -57,6 +58,7 @@ public final class SystemsTest {
         equipment();
         uiPalette();
         glCapabilityParsing();
+        dayNightCycle();
 
         System.out.println(checks + " checks, " + failures + " failures");
         if (failures > 0) {
@@ -74,6 +76,16 @@ public final class SystemsTest {
         check("magic pink is #F2A1F2", rgb(Style.PINK, 0xf2, 0xa1, 0xf2));
         check("reward gold is #F7B769", rgb(Style.GOLD, 0xf7, 0xb7, 0x69));
         check("primary text is #F5F0FF", rgb(Style.IVORY, 0xf5, 0xf0, 0xff));
+    }
+
+    private static void dayNightCycle() {
+        check("day begins bright", Math.abs(DayNightCycle.nightAmount(0f)) < 0.001f);
+        check("sunset is a smooth transition", Math.abs(DayNightCycle.nightAmount(90f) - 0.5f) < 0.001f);
+        check("midnight reaches full night", Math.abs(DayNightCycle.nightAmount(180f) - 1f) < 0.001f);
+        check("cycle repeats after one day",
+                Math.abs(DayNightCycle.nightAmount(360f) - DayNightCycle.nightAmount(0f)) < 0.001f);
+        check("cycle phase stays normalized", DayNightCycle.phase(-1f) >= 0f
+                && DayNightCycle.phase(-1f) < 1f);
     }
 
     private static void glCapabilityParsing() {
@@ -1226,6 +1238,7 @@ public final class SystemsTest {
         System.out.println("SaveGame");
         World world = new World(20260101L);
         world.gold = 1234;
+        world.worldTime = 127.5f;
         world.kills = 17;
         world.deaths = 3;
         world.spells.pages[0].level = 12;
@@ -1239,10 +1252,11 @@ public final class SystemsTest {
         check("a save has a sane size", bytes.length > 100 && bytes.length < 8000);
 
         SaveGame loaded = SaveGame.fromBytes(bytes);
-        check("new saves carry version 4 checksummed format", bytes[7] == 4);
+        check("new saves carry version 5 checksummed format", bytes[7] == 5);
         check("gold survives", loaded.gold == 1234);
         check("kills survive", loaded.kills == 17);
         check("deaths survive", loaded.deaths == 3);
+        check("day/night simulation time survives", Math.abs(loaded.worldTime - 127.5f) < 0.01f);
         check("mastery survives", loaded.spellLevel[0] == 12);
         check("experience survives", Math.abs(loaded.spellXp[0] - 4.5f) < 0.01f);
         check("Light capacity survives",
@@ -1282,7 +1296,8 @@ public final class SystemsTest {
 
         // Version 2 and 3 saves remain readable so this update does not erase
         // existing player progress. v2 predates the in-Hollow field.
-        byte[] v3 = java.util.Arrays.copyOf(bytes, bytes.length - 4);
+        // v3 had neither checksum nor worldTime; v2 also predates inHollow.
+        byte[] v3 = java.util.Arrays.copyOf(bytes, bytes.length - 8);
         v3[7] = 3;
         check("version 3 saves remain readable", SaveGame.fromBytes(v3).gold == 1234);
         byte[] v2 = new byte[v3.length - 1];
@@ -1291,10 +1306,25 @@ public final class SystemsTest {
         v2[7] = 2;
         check("version 2 saves remain readable", SaveGame.fromBytes(v2).gold == 1234);
 
+        // v4 introduced a checksum but had no persisted simulation time.
+        byte[] v4 = java.util.Arrays.copyOf(bytes, bytes.length - 8);
+        v4[7] = 4;
+        java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+        crc.update(v4);
+        byte[] v4WithCrc = java.util.Arrays.copyOf(v4, v4.length + 4);
+        int crcValue = (int) crc.getValue();
+        v4WithCrc[v4.length] = (byte) (crcValue >>> 24);
+        v4WithCrc[v4.length + 1] = (byte) (crcValue >>> 16);
+        v4WithCrc[v4.length + 2] = (byte) (crcValue >>> 8);
+        v4WithCrc[v4.length + 3] = (byte) crcValue;
+        check("version 4 checksummed saves remain readable",
+                SaveGame.fromBytes(v4WithCrc).gold == 1234);
+
         // And it must actually apply to a fresh world.
         World fresh = new World(20260101L);
         loaded.applyTo(fresh);
         check("applying restores gold", fresh.gold == 1234);
+        check("applying restores day/night time", Math.abs(fresh.worldTime - 127.5f) < 0.01f);
         check("applying restores mastery", fresh.spells.pages[0].level == 12);
         check("applying restores quest progress",
                 fresh.quests.entries[q.def.id].progress > 0);
