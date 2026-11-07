@@ -29,6 +29,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Source the fetched toolchain, so this works standalone on a fresh clone or a
+# rebuilt sandbox instead of only where JAVA_HOME is already exported.
+if [[ -z "${JAVA_HOME:-}" && -f "$ROOT/tools/.toolchain/env.sh" ]]; then
+  # shellcheck disable=SC1091
+  source "$ROOT/tools/.toolchain/env.sh"
+fi
+if [[ -z "${JAVA_HOME:-}" && -x "$ROOT/tools/.toolchain/java/bin/java" ]]; then
+  export JAVA_HOME="$ROOT/tools/.toolchain/java"
+fi
+
 BUILD_DIR="$ROOT/build"
 GEN_DIR="$BUILD_DIR/gen"
 CLASS_DIR="$BUILD_DIR/classes"

@@ -9,15 +9,25 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# Source the fetched toolchain so this works standalone -- CI, a fresh clone,
+# or a rebuilt sandbox -- rather than only inside an interactive shell with a
+# hand-exported JAVA_HOME. It also removes the hardcoded /tmp paths that used
+# to break every time the sandbox was recreated.
+if [[ -z "${JAVA_HOME:-}" && -f "$ROOT/tools/.toolchain/env.sh" ]]; then
+  # shellcheck disable=SC1091
+  source "$ROOT/tools/.toolchain/env.sh"
+fi
+if [[ -z "${JAVA_HOME:-}" && -x "$ROOT/tools/.toolchain/java/bin/java" ]]; then
+  export JAVA_HOME="$ROOT/tools/.toolchain/java"
+fi
+
 JAVA_BIN="${JAVA_HOME:+$JAVA_HOME/bin/java}"
-if [[ -z "${JAVA_BIN:-}" ]]; then
-  for candidate in /tmp/jdkpkg/jdk4py/java-runtime/bin/java "$(command -v java || true)"; do
-    [[ -x "$candidate" ]] && JAVA_BIN="$candidate" && break
-  done
+if [[ -z "${JAVA_BIN:-}" || ! -x "$JAVA_BIN" ]]; then
+  JAVA_BIN="$(command -v java || true)"
 fi
 [[ -n "${JAVA_BIN:-}" ]] || { echo "error: no java runtime found" >&2; exit 1; }
 
-TOOLS="${BUILD_TOOLS:-/tmp/tc/tools}"
+TOOLS="${BUILD_TOOLS:-$ROOT/tools/.toolchain}"
 ANDROID_JAR="${ANDROID_JAR:-$TOOLS/android.jar}"
 ECJ_JAR="${ECJ_JAR:-$(ls "$TOOLS"/ecj-*.jar 2>/dev/null | head -1)}"
 [[ -e "$ANDROID_JAR" ]] || { echo "error: android.jar not found ($ANDROID_JAR)" >&2; exit 1; }
@@ -52,6 +62,9 @@ echo "==> verifying the real GL start-up path (shaders, renderer, one frame)"
 echo "==> verifying the FBX import path"
 python3 "$ROOT/tools/tests/test_fbx_import.py"
 python3 "$ROOT/tools/tests/test_mesh_text.py"
+
+echo "==> verifying the menu input path"
+"$ROOT/tools/input_path_test.sh"
 
 echo "==> running headless verification"
 "$JAVA_BIN" -cp "$OUT" HeadlessTest

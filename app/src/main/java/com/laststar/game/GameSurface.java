@@ -4,6 +4,7 @@ import android.content.Context;
 import android.opengl.GLSurfaceView;
 import android.os.Build;
 import android.view.MotionEvent;
+import android.view.View;
 
 import com.laststar.game.audio.SoundFx;
 import com.laststar.game.core.Camera;
@@ -67,6 +68,26 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
         setPreserveEGLContextOnPause(true);
         setRenderer(this);
         setRenderMode(RENDERMODE_CONTINUOUSLY);
+
+        // A View with only onTouchEvent overridden does not reliably receive
+        // touch events: the framework will not dispatch to it unless it is
+        // clickable and focusable, and with setContentView(surface) there is no
+        // parent to route them either. Without these two lines the whole game
+        // renders perfectly and no input ever arrives -- the exact symptom of
+        // "the home screen shows but nothing works".
+        setClickable(true);
+        setFocusable(true);
+        setFocusableInTouchMode(true);
+        requestFocus();
+
+        // Belt and braces: route through a listener as well. If onTouchEvent
+        // is somehow bypassed by a device's input stack, this still fires.
+        setOnTouchListener(new OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                return handleTouch(event);
+            }
+        });
 
         prefs = new Prefs(context);
         world = new World(20261105L);
@@ -319,13 +340,40 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
     }
 
     private boolean wasOnGround = true;
+    private int touchLogCount;
     private boolean attackSoundPlayed;
 
     // ----------------------------------------------------------------- input
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        return handleTouch(event);
+    }
+
+    /**
+     * Single entry point for touch, called from both the listener and the
+     * override so no device-specific routing quirk can swallow input.
+     *
+     * <p>Logs the first few events: if a build ever renders but ignores taps
+     * again, logcat says immediately whether events arrive at all or arrive
+     * and are mishandled, which are very different bugs.</p>
+     */
+    private boolean handleTouch(MotionEvent event) {
+        if (touchLogCount < 8) {
+            touchLogCount++;
+            android.util.Log.i("LastStar", "touch #" + touchLogCount
+                    + " action=" + event.getActionMasked()
+                    + " at " + (int) event.getX() + "," + (int) event.getY()
+                    + " surface=" + screenW + "x" + screenH
+                    + " menu=" + inMenu);
+        }
         float scale = TouchControls.scaleFor(screenW, screenH);
+        if (scale <= 0f) {
+            // Guards the first frames before the surface size is known: a zero
+            // scale makes every virtual coordinate infinite and every hit test
+            // miss, which looks exactly like a dead screen.
+            return true;
+        }
         if (inMenu) {
             float vx = event.getX() / scale;
             float vy = event.getY() / scale;

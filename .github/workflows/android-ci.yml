@@ -74,6 +74,9 @@ jobs:
         run: python3 tools/tests/test_fbx_import.py
           && python3 tools/tests/test_mesh_text.py
 
+      - name: Verify the menu input path
+        run: ./tools/input_path_test.sh
+
       - name: Run the headless verification suite
         run: |
           source tools/.toolchain/env.sh
