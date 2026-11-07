@@ -26,9 +26,9 @@ repository**, no Unity, no Gradle, no Android Studio required.
 3. Launch **Last Star**. Hold the phone in landscape.
 
 Works on **every Android device since Android 5.0 (API 21)** — 32-bit, 64-bit,
-ARM and x86. No permissions at all: no internet, no ads, no analytics, ~462 KiB.
+ARM and x86. No permissions at all: no internet, no ads, no analytics, ~669 KiB.
 Signed with APK schemes v1 + v2 + v3
-(SHA-256 `dea644ee74fd4e269fbec16c910c0c67e5eb7212b6e23626ef8bd6fb99493962`).
+(SHA-256 `3018e2db26414973891e3b67517272733fe6c254088cc45ead55fbf4896751cf`).
 
 ### Controls
 
@@ -39,8 +39,28 @@ Signed with APK schemes v1 + v2 + v3
 | **HIT** | Melee attack (3-hit combo, 110° arc) |
 | **JMP** | Jump |
 | **RUN** | Sprint (drains the blue stamina bar) |
+| **1–4** spell slots, bottom right | Cast from the Wander (drains the gold Light bar) |
 | ❙❙ / 🔊 icons, top left | Open the menus / mute (the ❙❙ button opens Settings) |
 | Bottom tab bar | Home · About · Shop · Quests · Wardrobe · Settings |
+
+### The Wander
+
+Walk a short way from where you start and you will find **the Wander**, the
+spell-book, floating a hand's width off the ground with a pale violet halo.
+Walking into it wakes four pages:
+
+| Slot | Spell | School | Light | What it does |
+|---|---|---|---|---|
+| 1 | Ember Shot | Elemental | 8 | A bolt at the nearest thing in front |
+| 2 | Gale Cut | Elemental | 6 | A wide cut all around you |
+| 3 | Ward | Defensive | 12 | Two seconds where nothing can touch you |
+| 4 | Starfall | Arcane | 22 | A heavy strike that staggers what it hits |
+
+Spells are not bought. Each one has thirty levels of mastery and earns
+experience from landing hits, so a page you use is a page that grows. **Light**
+is the fuel: it trickles back on its own and quickly from pickups, and the gold
+bar under your health is what it costs. Nothing can be cast before the book is
+found — that is the point of it.
 
 ### The interface
 
@@ -82,13 +102,14 @@ world from dusk into night — sky, fog, sun and ambient light all shift as you
 progress — and every second shard heals you and raises your maximum health.
 Clear all six to restore the sky, then begin the next, harder night.
 
-* Procedurally generated 220 m × 220 m island ringed by foothills, with a
-  **snow-capped mountain range** on the horizon (a separate 56-peak mesh that
-  follows the camera, so the skyline is never empty), a lake with sand
-  shoreline — dressed with **84 imported CC0 models**, including **14 rock
-  spires built from imported cliff blocks** standing inside the map itself (7,000+ trees, rocks, bushes, grass and flowers; cliff ridges; a
-  castle gatehouse, a courtyard with towers, a camp and a watchtower), distance
-  culled per model so the draw count stays low while the map looks full
+* Procedurally generated 220 m × 220 m island, a lake with a sand shoreline,
+  and **30 mountains in two rings at 300 m and 430 m** closing the horizon on
+  top of the painted 56-peak backdrop. **95 models** dress the world: the
+  imported FBX pack (tree, bush, grass, flower, flowers, rock, rock2, pebbles,
+  mountain, bridge) alongside the built-in kit, with **31,000 props** placed —
+  19,700 grass clumps alone — plus cliff ridges, a castle gatehouse, a
+  courtyard with towers, a camp and a watchtower. Distance culled per model so
+  the draw count stays low while the map looks full
 * Six shards, five+ Wardens (more each level) with telegraph → swing → recover
   melee AI, aggro, leashing, stagger and health regeneration
 * Third-person orbit camera with terrain-aware pull-in, camera-relative
@@ -108,10 +129,25 @@ Clear all six to restore the sky, then begin the next, harder night.
 
 ## The imported model set
 
-The assets that came with this pass are **CC0 Kenney kits** — Nature, Fantasy
-Town, Castle and Survival — pulled from the CC0 mirror
-[`shorepine/kenney`](https://github.com/shorepine/kenney), baked into one asset
-and used *everywhere* in the world, not in a single showcase corner.
+Two sources. The **built-in kit** — Nature, Fantasy Town, Castle and Survival —
+is CC0 Kenney, pulled from the CC0 mirror
+[`shorepine/kenney`](https://github.com/shorepine/kenney) and baked into one
+asset. The **environment pack** is the eleven-model FBX set in `asset.zip` at
+the repository root, imported by `tools/fbx_import.py` and
+`tools/bake_mountain_pack.py`. The eleven are merged into the same baked file
+as the built-in 84, so `world.bin` is 95 models and 25,934 triangles, and
+everything is used *everywhere* in the world rather than in a showcase corner.
+
+| Pack asset | Role in the world |
+|---|---|
+| `mountain` | 22 peaks in two rings, 128–236 m tall |
+| `tree` | 302 in the forest |
+| `bush` | 990 through the meadow |
+| `grass` | 19,692 clumps — the ground carpet |
+| `flower`, `flowers` | 2,839 + 3,918 in the meadow |
+| `rock`, `rock2`, `pebbles` | 61 + 307 + 1,620 |
+| `bridge` | 2, spanning the lake where it is narrow enough |
+| `spell-book` | **the Wander**, placed once by the world |
 
 ![The imported model set](docs/ui/models.png)
 
