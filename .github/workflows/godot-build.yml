@@ -106,9 +106,20 @@ jobs:
           godot --headless --path . --quit-after 8
 
       - name: Export arm64 Android debug APK
+        shell: bash
         run: |
+          set -uo pipefail
           mkdir -p builds/android
-          godot --headless --path . --export-debug "Android" builds/android/LastStar-debug.apk
+          if ! godot --headless --path . --export-debug "Android" builds/android/LastStar-debug.apk > "$RUNNER_TEMP/godot-export.log" 2>&1; then
+            cat "$RUNNER_TEMP/godot-export.log"
+            echo "### Android export failure" >> "$GITHUB_STEP_SUMMARY"
+            cat "$RUNNER_TEMP/godot-export.log" >> "$GITHUB_STEP_SUMMARY"
+            while IFS= read -r line; do
+              if [[ -n "$line" ]]; then echo "::error::$line"; fi
+            done < "$RUNNER_TEMP/godot-export.log"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/godot-export.log"
           test -s builds/android/LastStar-debug.apk
 
       - name: Upload Android APK
