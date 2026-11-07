@@ -73,6 +73,14 @@ under the repository's EPL-2.0 licence.
 The three Unity projects under `upstream/` keep their own licences — see
 [`upstream/README.md`](upstream/README.md).
 
+The separate `godot/` migration prototype is based on
+[ProWille/Godot-Adventure-Game](https://github.com/ProWille/Godot-Adventure-Game),
+upstream commit `774112bc3d689c2690f8b40a3955f321dfc51542`, under its MIT
+licence. Its original code, placeholder assets, screenshots, and license remain
+in that directory; it is not compiled into the native Android APK. See
+[`docs/GODOT_MIGRATION.md`](docs/GODOT_MIGRATION.md) before redistributing the
+prototype.
+
 ## Rendering
 
 The world is drawn with a hand-written toon shader, not with an imported

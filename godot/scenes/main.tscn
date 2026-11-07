@@ -1,0 +1,122 @@
+[gd_scene format=3 uid="uid://cn8edqjhbxsuc"]
+
+[ext_resource type="Shader" uid="uid://fvgd8s2ryqg8" path="res://shaders/terrain.gdshader" id="1_sugp2"]
+[ext_resource type="PackedScene" uid="uid://xth1go5lw1eu" path="res://scenes/sky.tscn" id="1_tipki"]
+[ext_resource type="Script" uid="uid://cawkxwq67rs1v" path="res://scripts/TerrainController.cs" id="2_jyhfs"]
+[ext_resource type="Resource" uid="uid://dq7dbpnk5p8d6" path="res://scripts/Biomes/Forest/ForestGenerator.tres" id="3_a8y0u"]
+[ext_resource type="Resource" uid="uid://ceepvn633kke6" path="res://scripts/Decorations/Grass/GrassGenerator.tres" id="3_eb6dy"]
+[ext_resource type="Resource" uid="uid://k2hy1mwafmgo" path="res://scripts/Biomes/Ocean/OceanGenerator.tres" id="3_jkv2x"]
+[ext_resource type="Resource" uid="uid://cya0kkp5j7ujm" path="res://scripts/Decorations/Trees/TreeGenerator.tres" id="3_trceg"]
+[ext_resource type="Resource" uid="uid://b43s8hhclyn5r" path="res://scripts/Biomes/Plains/PlainsGenerator.tres" id="4_jbj1t"]
+[ext_resource type="PackedScene" uid="uid://byfa1tjtd5hfw" path="res://scenes/camera.tscn" id="5_tbgi4"]
+[ext_resource type="Resource" uid="uid://dl7i0bdcaiksl" path="res://scripts/Biomes/Mountain/MountainGenerator.tres" id="6_muem4"]
+[ext_resource type="Resource" uid="uid://dr5xgsfmysydf" path="res://scripts/Decorations/Stones/StoneGenerator.tres" id="9_0ld40"]
+[ext_resource type="Texture2D" uid="uid://dl0ekiocrf7mh" path="res://assets/Blockbench/terrain/forest_terrain_texture.png" id="10_jbj1t"]
+[ext_resource type="Texture2D" uid="uid://dlrx4gwgk2itk" path="res://assets/Blockbench/terrain/sand_terrain_texture.png" id="11_a8y0u"]
+[ext_resource type="Texture2D" uid="uid://c7hukusiq4wi6" path="res://assets/Blockbench/terrain/grass_terrain_texture.png" id="11_jbj1t"]
+[ext_resource type="Texture2D" uid="uid://b3a5puaud8b3q" path="res://assets/Blockbench/terrain/rock_terrain_texture.png" id="12_dp3eg"]
+[ext_resource type="Resource" uid="uid://cqjoi7bwwsyv1" path="res://scripts/Decorations/Plants/PlantGenerator.tres" id="16_0ld40"]
+[ext_resource type="PackedScene" uid="uid://dus5mvg748wnc" path="res://scenes/player.tscn" id="20_yc10j"]
+[ext_resource type="Resource" uid="uid://egkus3nsj3q5" path="res://scripts/Water/WaterGenerator.tres" id="21_wtrsc"]
+[ext_resource type="Resource" uid="uid://dpel34itqk8ee" path="res://scripts/Biomes/Snow/SnowGenerator.tres" id="22_snow"]
+[ext_resource type="Resource" uid="uid://chpwy6wwsn0w0" path="res://scripts/Biomes/Desert/DesertGenerator.tres" id="23_desert"]
+[ext_resource type="Script" uid="uid://cqy0doqb1pwrd" path="res://scripts/Overlay/DebugOverlay.cs" id="23_y6deb"]
+[ext_resource type="Texture2D" uid="uid://snowtex01" path="res://assets/Blockbench/terrain/snow_terrain_texture.png" id="24_snowtx"]
+[ext_resource type="Script" uid="uid://deohhb7hg32ed" path="res://scripts/Overlay/MinimapOverlay.cs" id="24_y6deb"]
+[ext_resource type="Texture2D" uid="uid://desertex01" path="res://assets/Blockbench/terrain/desert_terrain_texture.png" id="25_desertx"]
+[ext_resource type="Resource" uid="uid://cjqm1ewoqo7jh" path="res://scripts/Grass/BladeGrassGenerator.tres" id="26_blade"]
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_eb6dy"]
+frequency = 0.0005
+fractal_octaves = 3
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_jkv2x"]
+noise_type = 3
+frequency = 0.002
+fractal_octaves = 3
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_jbj1t"]
+noise_type = 2
+frequency = 0.002
+fractal_type = 2
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_trceg"]
+frequency = 0.0005
+fractal_octaves = 3
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_a8y0u"]
+frequency = 0.001
+fractal_octaves = 3
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_muem4"]
+fractal_octaves = 4
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_dp3eg"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_qjw6e"]
+render_priority = 0
+shader = ExtResource("1_sugp2")
+shader_parameter/sand_texture = ExtResource("11_a8y0u")
+shader_parameter/grass_texture = ExtResource("11_jbj1t")
+shader_parameter/forest_texture = ExtResource("10_jbj1t")
+shader_parameter/rock_texture = ExtResource("12_dp3eg")
+shader_parameter/snow_texture = ExtResource("24_snowtx")
+shader_parameter/desert_texture = ExtResource("25_desertx")
+shader_parameter/texture_scale = 10.0
+shader_parameter/use_textures = true
+shader_parameter/sand_color = Color(0.9, 0.76, 0.5, 1)
+shader_parameter/grass_color = Color(0.4, 0.8, 0.2, 1)
+shader_parameter/forest_color = Color(0.2, 0.6, 0.1, 1)
+shader_parameter/rock_color = Color(0.7, 0.7, 0.8, 1)
+shader_parameter/snow_color = Color(0.95, 0.95, 1, 1)
+shader_parameter/desert_color = Color(0.85, 0.7, 0.4, 1)
+
+[node name="Main" type="Node3D" unique_id=909135880]
+
+[node name="Sky" parent="." unique_id=184431804 instance=ExtResource("1_tipki")]
+
+[node name="TerrainController" type="Node3D" parent="." unique_id=1824529683 node_paths=PackedStringArray("Player", "Camera")]
+script = ExtResource("2_jyhfs")
+TerrainNoise = SubResource("FastNoiseLite_eb6dy")
+ErosionNoise = SubResource("FastNoiseLite_jkv2x")
+RnrNoise = SubResource("FastNoiseLite_jbj1t")
+TemperatureNoise = SubResource("FastNoiseLite_trceg")
+MoistureNoise = SubResource("FastNoiseLite_a8y0u")
+DetailNoise = SubResource("FastNoiseLite_muem4")
+ClutterNoise = SubResource("FastNoiseLite_dp3eg")
+OceanGenerator = ExtResource("3_jkv2x")
+PlainsGenerator = ExtResource("4_jbj1t")
+ForestGenerator = ExtResource("3_a8y0u")
+MountainGenerator = ExtResource("6_muem4")
+SnowGenerator = ExtResource("22_snow")
+DesertGenerator = ExtResource("23_desert")
+ChunkMaterial = SubResource("ShaderMaterial_qjw6e")
+RenderDistance = 8
+Resolution = 16
+Height = 32.0
+MountainHeightThreshold = 0.8
+ForestMoistureThreshold = 0.4
+SnowTemperatureThreshold = 0.4
+WaterGenerator = ExtResource("21_wtrsc")
+TreeGenerator = ExtResource("3_trceg")
+GrassGenerator = ExtResource("3_eb6dy")
+StoneGenerator = ExtResource("9_0ld40")
+PlantGenerator = ExtResource("16_0ld40")
+BladeGrassGen = ExtResource("26_blade")
+Player = NodePath("../Player")
+Camera = NodePath("../Camera")
+PlayerOffset = 1.0
+
+[node name="Player" parent="." unique_id=1483300688 instance=ExtResource("20_yc10j")]
+
+[node name="Camera" parent="." unique_id=922425726 instance=ExtResource("5_tbgi4")]
+Speed = 1.0
+Sensitivity = 0.25
+
+[node name="DebugOverlay" type="CanvasLayer" parent="." unique_id=481454780]
+script = ExtResource("23_y6deb")
+
+[node name="MinimapOverlay" type="CanvasLayer" parent="." unique_id=1672899677]
+script = ExtResource("24_y6deb")
+_minimapSize = 256
+_minimapTransparency = 0.5
