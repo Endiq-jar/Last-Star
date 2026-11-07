@@ -48,6 +48,7 @@ public final class SystemsTest {
         bosses();
         spellForge();
         companions();
+        travel();
 
         System.out.println(checks + " checks, " + failures + " failures");
         if (failures > 0) {
@@ -402,6 +403,60 @@ public final class SystemsTest {
             }
         }
         return true;
+    }
+
+    /** The map screen's only claim: travelling actually rebuilds the world. */
+    private static void travel() {
+        System.out.println("Region travel");
+        World world = new World(31337L);
+        // Every settlement has to be reachable, or the document's fourteen are
+        // fourteen names rather than fourteen places.
+        boolean allReachable = true;
+        for (int i = 0; i < Elaris.REGION_COUNT; i++) {
+            world.enterRegion(i);
+            if (world.regionIndex != i) {
+                allReachable = false;
+            }
+            if (world.terrain.region != Elaris.regions()[i]) {
+                allReachable = false;
+            }
+        }
+        check("every settlement can be entered", allReachable);
+
+        // Terrain must actually differ, or travel is a change of name.
+        world.enterRegion(0);
+        float ashvale = world.terrain.heightAt(30f, 30f);
+        world.enterRegion(10);
+        float deep = world.terrain.heightAt(30f, 30f);
+        world.enterRegion(5);
+        float frost = world.terrain.heightAt(30f, 30f);
+        check("terrain differs between settlements",
+                Math.abs(ashvale - deep) > 0.01f || Math.abs(deep - frost) > 0.01f);
+
+        // Travel must not cost the player their book.
+        world.enterRegion(2);
+        world.spells.pages[0].level = 9;
+        world.enterRegion(7);
+        check("mastery survives travel", world.spells.pages[0].level == 9);
+
+        // Arriving opens the companion who lives there and their quest.
+        World meet = new World(555L);
+        int withCompanion = 0;
+        for (int i = 0; i < Companions.count(); i++) {
+            meet.enterRegion(Companions.get(i).region);
+            withCompanion++;
+        }
+        check("every companion is met by travelling",
+                meet.party.recruitedCount() == Companions.count());
+
+        // The map's own numbers have to be honest.
+        boolean everyRegionStocked = true;
+        for (int i = 0; i < Elaris.REGION_COUNT; i++) {
+            if (SpellCorpus.inRegion(i).length == 0) {
+                everyRegionStocked = false;
+            }
+        }
+        check("every region holds at least one page", everyRegionStocked);
     }
 
     // -- companions -----------------------------------------------------------

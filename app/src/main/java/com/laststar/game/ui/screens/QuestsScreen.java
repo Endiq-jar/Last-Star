@@ -383,8 +383,10 @@ public final class QuestsScreen implements Screen {
         GenshinKit.roundButton(b, w - 30f, 26f, 15f, 0f, alpha);
         b.line(w - 35f, 21f, w - 25f, 31f, 2.2f, Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1],
                 Style.GOLD_LIGHT[2], alpha);
-        b.line(w - 25f, 21f, w - 35f, 31f, 2.2f, Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1],
-                Style.GOLD_LIGHT[2], alpha);
+        // A small globe, since the control is a map rather than a close button.
+        b.ring(w - 30f, 26f, 7f, 6.5f, 14, 1f, 0.92f, 0.70f, alpha);
+        b.quad(w - 31f, 19f, 2f, 14f, 1f, 0.92f, 0.70f, alpha * 0.8f);
+        b.quad(w - 37f, 25.5f, 14f, 1.6f, 1f, 0.92f, 0.70f, alpha * 0.8f);
     }
 
     /** Trims {@code text} with ellipsis until it fits {@code maxWidth}. */
@@ -467,7 +469,9 @@ public final class QuestsScreen implements Screen {
             return Action.BACK;
         }
         if (Math.abs(x - (w - 30f)) < 20f && Math.abs(y - 26f) < 20f) {
-            return Action.BACK;
+            // The journal's close control opens the map: deciding where to go
+            // next is what a player does after reading their quests.
+            return Action.OPEN_TRAVEL;
         }
         return Action.NONE;
     }

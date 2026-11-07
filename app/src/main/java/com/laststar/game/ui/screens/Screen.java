@@ -17,6 +17,8 @@ public interface Screen {
         OPEN_SPELLS,
         /** Asks the menu to open the forge. */
         OPEN_FORGE,
+        /** Asks the menu to open the map. */
+        OPEN_TRAVEL,
         BACK
     }
 
