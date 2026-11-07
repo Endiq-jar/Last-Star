@@ -22,10 +22,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python for GDScript checks
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -38,16 +38,28 @@ jobs:
           gdlint scripts/laststar/*.gd
 
       - name: Install Java for Android export
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Install Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Configure preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          android_home="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          test -d "$android_home"
+          sdkmanager_bin="$(find "$android_home/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          test -n "$sdkmanager_bin"
+          echo "ANDROID_HOME=$android_home" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$android_home" >> "$GITHUB_ENV"
+          echo "$(dirname "$sdkmanager_bin")" >> "$GITHUB_PATH"
+          "$sdkmanager_bin" --version
 
       - name: Install Android platform and NDK packages
+        shell: bash
         run: |
+          set -euo pipefail
           yes | sdkmanager --licenses >/dev/null
           sdkmanager \
             "platform-tools" \
