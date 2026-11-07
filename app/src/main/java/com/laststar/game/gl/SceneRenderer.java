@@ -47,6 +47,8 @@ public final class SceneRenderer {
     private Mesh waterMesh;
     /** Ground fan beyond the playable map, under the mountain ring. */
     private Mesh skirtMesh;
+    /** Index of the spell-book model in the set, or -1 when it is absent. */
+    private int wanderModelIndex = -1;
     private Mesh sphereMesh;
     private Mesh shardMesh;
     private Mesh particleMesh;
@@ -142,6 +144,14 @@ public final class SceneRenderer {
             // Assets live in the APK, not on the Java classpath, so they are
             // opened through the AssetManager rather than a class loader.
             models = ModelLibrary.load(assets.open("models/world.bin"));
+            // The Wander is drawn separately from the prop grid: it is one
+            // object that floats and glows, not a scattered instance.
+            for (int i = 0; i < models.size(); i++) {
+                if (models.get(i).name.equals("pk_spell-book")) {
+                    wanderModelIndex = i;
+                    break;
+                }
+            }
             props = new PropPlanner(models, world.terrain, 20261105L);
             propMeshes = new Mesh[models.size()];
             for (int i = 0; i < models.size(); i++) {
@@ -224,6 +234,7 @@ public final class SceneRenderer {
         drawMountains(camera);
         drawProps(world, camera);
         drawShards(world);
+        drawWander(world);
         drawPickups(world);
         drawEnemies(world);
         drawPlayer(world);
@@ -434,6 +445,54 @@ public final class SceneRenderer {
             drawMesh(ringMesh);
             sceneProgram.setEmissive(0f);
         }
+    }
+
+    /**
+     * Draws the Wander where it lies, before it is picked up.
+     *
+     * <p>It floats, turns and carries its own light: the object is the only
+     * route to the spell system, so it has to be findable from a distance
+     * without a marker pinned on it. The bob is offset from the shards' phase
+     * so the two kinds of pickup never pulse in step.</p>
+     */
+    private void drawWander(World world) {
+        if (wanderModelIndex < 0 || world.hasWander || world.wanderPosition == null) {
+            return;
+        }
+        Vec3 p = world.wanderPosition;
+        float bob = (float) Math.sin(world.worldTime * 1.6f) * 0.13f;
+        float y = p.y + 0.55f + bob;
+
+        // Halo first, additively, so it reads as a glow rather than a disc.
+        GLES20.glEnable(GLES20.GL_BLEND);
+        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE);
+        GLES20.glDepthMask(false);
+        modelMatrix.setMultiply(Mat4.translation(p.x, y, p.z),
+                Mat4.scale(1.5f, 1.5f, 1.5f));
+        tmp.setMultiply(frameViewProj, modelMatrix);
+        sceneProgram.setMvp(tmp.m);
+        sceneProgram.setModel(modelMatrix.m);
+        sceneProgram.setTint(0.55f, 0.62f, 1f, 0.40f);
+        sceneProgram.setTintAmount(1f);
+        sceneProgram.setEmissive(0.5f);
+        drawMesh(ringMesh);
+        GLES20.glDepthMask(true);
+        GLES20.glDisable(GLES20.GL_BLEND);
+
+        modelMatrix.setMultiply(
+                Mat4.translation(p.x, y, p.z),
+                Mat4.rotationY(world.wanderSpin));
+        tmp.setMultiply(frameViewProj, modelMatrix);
+        sceneProgram.setMvp(tmp.m);
+        sceneProgram.setModel(modelMatrix.m);
+        sceneProgram.setTint(0.62f, 0.55f, 1f, 1f);
+        sceneProgram.setTintAmount(0.55f);
+        sceneProgram.setEmissive(0.42f);
+        sceneProgram.setFloat("uWaveAmp", 0f);
+        sceneProgram.setTime(world.worldTime);
+        drawMesh(propMeshes[wanderModelIndex]);
+        sceneProgram.setEmissive(0f);
+        sceneProgram.setTintAmount(0f);
     }
 
     private void drawPickups(World world) {

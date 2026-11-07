@@ -43,6 +43,13 @@ public final class World {
     public final List<Shard> shards = new ArrayList<>();
     public final List<Pickup> pickups = new ArrayList<>();
     public final List<Projectile> projectiles = new ArrayList<>();
+    /** The spell-book and the player's Light. */
+    public final Wander wander = new Wander();
+    /** Where the Wander lies, or null once it has been picked up. */
+    public Vec3 wanderPosition;
+    public boolean hasWander;
+    /** Spin clock for the book, so the renderer can animate it. */
+    public float wanderSpin;
 
     public Phase phase = Phase.INTRO;
     public float phaseTimer;
@@ -227,7 +234,39 @@ public final class World {
             pickups.add(new Pickup(new Vec3(x, terrain.heightAt(x, z) + 0.85f, z), Pickup.Type.HEALTH));
         }
 
+        // The Wander lies a short walk from spawn. It is the first thing to
+        // find, so it is close, but not so close that it is simply there.
+        wanderPosition = findWanderSpot(terrain);
+        hasWander = false;
+
         shardsCollected = 0;
+    }
+
+    /**
+     * Spiral search for open dry ground for the Wander.
+     *
+     * <p>Falls back to the spawn point so the book can always be found even on
+     * a seed where every candidate is rejected; losing it would mean losing
+     * the spell system.</p>
+     */
+    private static Vec3 findWanderSpot(Terrain terrain) {
+        for (float radius = 9f; radius < 44f; radius += 1.5f) {
+            int steps = 16 + (int) (radius * 2f);
+            for (int i = 0; i < steps; i++) {
+                double a = i * Math.PI * 2.0 / steps;
+                float x = (float) Math.cos(a) * radius;
+                float z = (float) Math.sin(a) * radius;
+                float h = terrain.heightAt(x, z);
+                if (h < terrain.waterLevel + 1.1f) {
+                    continue;
+                }
+                if (terrain.slopeAt(x, z) > 0.34f) {
+                    continue;
+                }
+                return new Vec3(x, h + 0.30f, z);
+            }
+        }
+        return new Vec3(0f, terrain.heightAt(0f, 0f) + 0.30f, 0f);
     }
 
     public int level() {
@@ -267,6 +306,10 @@ public final class World {
         if (shakeAmount > 0f) {
             shakeAmount = Math.max(0f, shakeAmount - dt * 2.2f);
         }
+        // The book is always open: Light recovers and mastery creeps up during
+        // the intro card and after a death too, not only while fighting.
+        wander.tick(dt);
+        wanderSpin += dt * 45f;
 
         switch (phase) {
             case INTRO:
@@ -304,6 +347,7 @@ public final class World {
 
         player.tick(dt);
         handleMovement(dt, input);
+        handleCasting(dt, input);
         handleCombat(dt, input);
         updateEnemies(dt);
         updateShards(dt);
@@ -419,6 +463,167 @@ public final class World {
             shakeAmount = Math.min(1f, shakeAmount + 0.18f);
             resolveMeleeHit();
         }
+    }
+
+    /**
+     * Collects the Wander when walked into, and resolves casts.
+     *
+     * <p>Spells resolve here rather than inside a spell class because hitting
+     * something is a world question: which enemies are near, what is in front,
+     * what staggers. The Wander owns cost and mastery; the World owns the
+     * consequences.</p>
+     */
+    private void handleCasting(float dt, InputState in) {
+        if (!hasWander) {
+            if (wanderPosition != null) {
+                Vec3 to = wanderPosition.sub(player.position);
+                if (to.horizontalLength() < 2.0f && Math.abs(to.y) < 2.4f) {
+                    hasWander = true;
+                    wanderPosition = null;
+                    showMessage("The Wander -- four pages awake", 2.6f, 0.6f);
+                    pickupFlash = 1f;
+                    shakeAmount = Math.min(1f, shakeAmount + 0.2f);
+                }
+            }
+            // Nothing to cast with until the book is found.
+            return;
+        }
+        if (in.castSlot < 0) {
+            return;
+        }
+        Wander.Spell spell = wander.cast(in.castSlot);
+        if (spell != null) {
+            resolveCast(spell, in.castSlot);
+        }
+    }
+
+    /** Applies a cast spell's effect to the world. */
+    private void resolveCast(Wander.Spell spell, int slot) {
+        Vec3 facing = new Vec3((float) Math.sin(Math.toRadians(player.yaw)), 0f,
+                (float) Math.cos(Math.toRadians(player.yaw)));
+        Vec3 origin = player.centre();
+        int hits = 0;
+
+        switch (spell.effect) {
+            case WARD:
+                // A ward is a gift of time, not damage: the next few seconds of
+                // enemy blows are absorbed rather than merely softened.
+                player.invulnerability = Math.max(player.invulnerability, 2.2f);
+                showMessage(spell.name + " -- warded", 1.0f, 0.35f);
+                break;
+
+            case SWEEP:
+                // A cut centred on the player, so it works while surrounded.
+                for (int i = 0; i < enemies.size(); i++) {
+                    Enemy e = enemies.get(i);
+                    if (!e.alive) {
+                        continue;
+                    }
+                    Vec3 to = e.centre().sub(origin);
+                    float dist = to.horizontalLength();
+                    if (dist > spell.range + e.radius) {
+                        continue;
+                    }
+                    if (dist > 0.001f) {
+                        Vec3 flat = new Vec3(to.x, 0f, to.z).normalized();
+                        if (flat.dot(facing) < -0.10f) {
+                            continue;
+                        }
+                    }
+                    damageEnemy(e, spell.damage());
+                    hits++;
+                }
+                break;
+
+            case BOLT: {
+                Enemy target = nearestEnemyInFront(facing, spell.range, 0.55f);
+                if (target != null) {
+                    damageEnemy(target, spell.damage());
+                    hits++;
+                }
+                break;
+            }
+
+            case STARFALL: {
+                // Heavy and slow: it lands on the closest few enemies and
+                // staggers them, which is what makes it worth its Light cost.
+                int struck = 0;
+                for (int n = 0; n < 3; n++) {
+                    Enemy target = nearestEnemyInFront(facing, spell.range, 0.15f);
+                    if (target == null) {
+                        break;
+                    }
+                    damageEnemy(target, spell.damage());
+                    target.staggerTimer = 0.6f;
+                    struck++;
+                }
+                hits += struck;
+                break;
+            }
+
+            default:
+                break;
+        }
+
+        if (hits > 0) {
+            hitStop = 0.05f;
+            shakeAmount = Math.min(1f, shakeAmount
+                    + (spell.effect == Wander.Effect.STARFALL ? 0.5f : 0.24f));
+            if (spell.effect == Wander.Effect.BOLT) {
+                wander.spells[slot].awardXp(10f);
+            } else if (spell.effect == Wander.Effect.SWEEP) {
+                wander.spells[slot].awardXp(6f + hits * 2f);
+            } else if (spell.effect == Wander.Effect.STARFALL) {
+                wander.spells[slot].awardXp(12f);
+            } else {
+                wander.spells[slot].awardXp(8f);
+            }
+        }
+    }
+
+    /** Damages an enemy and does the kill bookkeeping in one place. */
+    private void damageEnemy(Enemy e, float amount) {
+        if (!e.alive) {
+            return;
+        }
+        e.damage(amount);
+        if (!e.alive) {
+            kills++;
+            spawnDeathBurst(e.position, e.height);
+            showMessage("Warden down", 1.1f, 0.3f);
+        }
+    }
+
+    /**
+     * Closest living enemy inside a cone in front of the player.
+     *
+     * @param minDot how tightly the cone hugs the facing direction; 1 is a
+     *               laser, 0 is the whole front half
+     */
+    private Enemy nearestEnemyInFront(Vec3 facing, float range, float minDot) {
+        Enemy best = null;
+        float bestDist = Float.MAX_VALUE;
+        Vec3 origin = player.centre();
+        for (int i = 0; i < enemies.size(); i++) {
+            Enemy e = enemies.get(i);
+            if (!e.alive) {
+                continue;
+            }
+            Vec3 to = e.centre().sub(origin);
+            float dist = to.length();
+            if (dist > range + e.radius || dist < 0.001f) {
+                continue;
+            }
+            Vec3 flat = new Vec3(to.x, 0f, to.z).normalized();
+            if (flat.dot(facing) < minDot) {
+                continue;
+            }
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = e;
+            }
+        }
+        return best;
     }
 
     /** Damages every enemy inside the melee cone. */

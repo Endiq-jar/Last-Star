@@ -23,11 +23,20 @@ public final class InputState {
     public boolean interactPressed;
     /** Camera yaw applied by the controller; the world copies it onto the player. */
     public float cameraYaw;
+    /**
+     * Spell slot pressed this frame, or -1.
+     *
+     * <p>A slot index rather than four booleans: the Wander's action bar is
+     * data-driven, so adding a page must not mean adding an input field.</p>
+     */
+    public int castSlot = -1;
 
     public void clearFrameEdges() {
+        castSlot = -1;
         attackPressed = false;
         jumpPressed = false;
         interactPressed = false;
+        castSlot = -1;
         lookX = 0f;
         lookY = 0f;
     }
@@ -42,5 +51,6 @@ public final class InputState {
         jumpPressed = false;
         sprintHeld = false;
         interactPressed = false;
+        castSlot = -1;
     }
 }

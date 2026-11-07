@@ -41,12 +41,27 @@ public final class TouchControls {
     public final Button sprint = new Button(690f, 268f, 24f);
     public final Button pause = new Button(196f, 26f, 15f);
     public final Button sound = new Button(236f, 26f, 15f);
+    /**
+     * The four spell slots, along the bottom edge under the thumb.
+     *
+     * <p>Out of the way of the stick and the look-drag, close enough to reach
+     * without moving the hand already holding the phone, and spread wide
+     * enough that a thumb cannot hit two at once.</p>
+     */
+    public final Button[] spell = {
+            new Button(452f, 352f, 18f),
+            new Button(505f, 352f, 18f),
+            new Button(558f, 352f, 18f),
+            new Button(611f, 352f, 18f)
+    };
 
     private int attackPointer = -1;
     private int jumpPointer = -1;
     private int sprintPointer = -1;
     private int pausePointer = -1;
     private int soundPointer = -1;
+    /** Pointer currently pressing each spell button, or -1. */
+    private final int[] spellPointer = {-1, -1, -1, -1};
 
     /** Set when the pause button is tapped; cleared by the activity. */
     public boolean pauseRequested;
@@ -131,6 +146,16 @@ public final class TouchControls {
             sound.pressAmount = 1f;
             soundToggleRequested = true;
             return;
+        }
+        // Spells first: they sit inside the right-hand look area, and a drag
+        // that starts on a spell button must cast rather than swing the camera.
+        for (int i = 0; i < spell.length; i++) {
+            if (spell[i].contains(x, y) && spellPointer[i] < 0) {
+                spellPointer[i] = id;
+                spell[i].pressAmount = 1f;
+                out.castSlot = i;
+                return;
+            }
         }
         if (attack.contains(x, y) && attackPointer < 0) {
             attackPointer = id;
@@ -240,6 +265,15 @@ public final class TouchControls {
         if (id == soundPointer) {
             soundPointer = -1;
             sound.pressAmount = 0f;
+            return;
+        }
+        // Pressing a spell must release it, or the button stays lit and the
+        // pointer leaks onto whatever that finger touches next.
+        for (int i = 0; i < spell.length; i++) {
+            if (id == spellPointer[i]) {
+                spellPointer[i] = -1;
+                spell[i].pressAmount = 0f;
+            }
         }
     }
 
@@ -251,6 +285,10 @@ public final class TouchControls {
         sprintPointer = -1;
         pausePointer = -1;
         soundPointer = -1;
+        for (int i = 0; i < spellPointer.length; i++) {
+            spellPointer[i] = -1;
+            spell[i].pressAmount = 0f;
+        }
         stickActive = false;
         lookActive = false;
         stickBaseX = 104f;
