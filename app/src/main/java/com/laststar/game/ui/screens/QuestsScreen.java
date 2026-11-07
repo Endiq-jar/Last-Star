@@ -236,13 +236,13 @@ public final class QuestsScreen implements Screen {
                     Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1], Style.GOLD_LIGHT[2], alpha);
             QuestLog.Entry entry = i < rows.size() ? rows.get(i) : null;
             String title = entry == null ? "--"
-                    : fit(entry.def.title, font, w * 0.255f - 30f, 1, 0.6f);
+                    : fit(entry.def.title, font, w * 0.255f - 16f, 1, 0.6f);
             b.textSpaced(title, rx + 22f, y + 6f, 1, 0.6f,
                     selected ? Style.IVORY[0] : Style.CREAM[0],
                     selected ? Style.IVORY[1] : Style.CREAM[1],
                     selected ? Style.IVORY[2] : Style.CREAM[2], alpha, font);
             String objective = entry == null ? ""
-                    : fit(entry.def.objectiveLine(), font, w * 0.255f - 30f, 1, 0.3f);
+                    : fit(entry.def.objectiveLine(), font, w * 0.255f - 16f, 1, 0.26f);
             b.textSpaced(objective, rx + 22f, y + 19f, 1, 0.3f,
                     Style.CREAM_DIM[0], Style.CREAM_DIM[1], Style.CREAM_DIM[2], alpha * 0.9f,
                     font);
@@ -307,19 +307,26 @@ public final class QuestsScreen implements Screen {
                 : entry.def.summary;
         float maxWidth = cw - 52f;
         String[] lines = UiBatch.wrap(desc, font, 1, 0.35f, maxWidth);
-        float ty = my + 56f;
+        float ty = my + 54f;
         for (int i = 0; i < lines.length && i < 3; i++) {
-            b.textSpaced(lines[i], cx + 26f, ty, 1, 0.35f,
+            String line = lines[i];
+            // The last line of a truncated block ends in an ellipsis, so it
+            // reads as cut rather than as a sentence that stopped dead.
+            if (i == 2 && lines.length > 3) {
+                line = fit(line + " " + lines[3], font, maxWidth, 1, 0.35f);
+            }
+            b.textSpaced(line, cx + 26f, ty, 1, 0.35f,
                     Style.INK[0] * 0.9f, Style.INK[1] * 0.9f, Style.INK[2] * 0.9f,
                     alpha * 0.92f, font);
             ty += 12.5f;
         }
 
-        // Where it is, so an entry reads as a place.
+        // Where it is, so an entry reads as a place. Sits under the
+        // description and above the chips, in the gap the card actually has.
         if (entry != null) {
             String where = Elaris.regions()[entry.def.region].name
                     + "  /  LEVEL " + entry.def.level;
-            b.textSpacedCentred(where, mx, ty + 4f, 1, 0.45f,
+            b.textSpacedCentred(where, mx, cy + ch - 82f, 1, 0.5f,
                     Style.GOLD[0], Style.GOLD[1], Style.GOLD[2], alpha * 0.85f, font);
         }
 
@@ -338,7 +345,11 @@ public final class QuestsScreen implements Screen {
             GenshinKit.parchment(b, chx, chipY, chipW, 26f, alpha * 0.95f);
             b.textSpacedCentred(chips[i], chx + chipW * 0.5f, chipY + 4f, 1, 0.6f,
                     Style.INK[0], Style.INK[1], Style.INK[2], alpha * 0.62f, font);
-            b.textSpacedCentred(values[i], chx + chipW * 0.5f, chipY + 15f, 1, 0.5f,
+            // Fitted, because a reward line like "+50 LIGHT CAPACITY" is wider
+            // than a third of the card and centred overflow hides text at both
+            // ends rather than just the right.
+            String value = fit(values[i], font, chipW - 8f, 1, 0.5f);
+            b.textSpacedCentred(value, chx + chipW * 0.5f, chipY + 15f, 1, 0.5f,
                     Style.INK[0], Style.INK[1], Style.INK[2], alpha, font);
         }
 

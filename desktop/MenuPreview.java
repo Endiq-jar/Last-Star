@@ -46,6 +46,26 @@ public final class MenuPreview {
                 new com.laststar.game.core.Mat4());
         UiBatch ui = new UiBatch();
         Menu menu = new Menu();
+        // Bind a real world: the journal and the shop read live state now, so
+        // an unbound preview would photograph the empty state rather than the
+        // screen a player actually sees.
+        com.laststar.game.world.World previewWorld =
+                new com.laststar.game.world.World(20261105L);
+        previewWorld.quests.refreshAvailability();
+        previewWorld.gold = 1840;
+        // Advance a little progress so the bars are not all empty.
+        java.util.List<com.laststar.game.world.QuestLog.Entry> open =
+                previewWorld.quests.openQuests();
+        if (!open.isEmpty()) {
+            com.laststar.game.world.QuestLog.Entry q = open.get(0);
+            previewWorld.quests.report(q.def.kind, q.def.subject, q.def.target / 2);
+        }
+        if (!open.isEmpty()) {
+            com.laststar.game.world.QuestLog.Entry q2 =
+                    previewWorld.quests.openQuests().get(0);
+            previewWorld.quests.report(q2.def.kind, q2.def.subject, q2.def.target);
+        }
+        menu.bind(previewWorld);
         // Jump straight to the page, then let everything settle.
         menu.page = page;
         menu.shownForTest(page);
@@ -63,8 +83,9 @@ public final class MenuPreview {
                 menu.update(1f / 60f);
             }
         } else if ("side".equals(variant)) {
-            menu.quests.activeTab = 1;
+            menu.quests.activeTab = 2;
             menu.quests.selectedQuest = 2;
+            menu.update(1f / 60f);
         }
         if ("font".equals(variant)) {
             ui.begin(720, 405);
