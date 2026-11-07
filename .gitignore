@@ -1,36 +1,30 @@
-# ---------------------------------------------------------------- build output
-/build/
-*.class
-*.dex
-*.apk.idsig
+# Godot editor/import cache
+.godot/
+.import/
+*.translation
+.mono/
 
-# --------------------------------------------------------------- editor noise
+# Godot exports and local build output
+/build/
+/builds/
+/export.cfg
+/export_credentials.cfg
+*.apk
+*.aab
+*.idsig
+
+# Local signing materials (never commit private keys)
+keystore/
+*.jks
+*.keystore
+
+# Editor and OS noise
 .idea/
 .vscode/
 *.iml
 *.userprefs
-
-# -------------------------------------------------------- platform local files
 .DS_Store
 Thumbs.db
-local.properties
 
-# Unity (upstream copies keep their own .gitignore as well)
-Library/
-Temp/
-Obj/
-Logs/
-UserSettings/
-
-# apksigner detached v4 signature sidecar
-*.idsig
-
-# toolchain fetched by tools/fetch_toolchain.sh (large, machine specific)
-tools/.toolchain/
-
-# Python bytecode from the tooling scripts
-tools/__pycache__/
-__pycache__/
-
-# Large third-party art archives: keep them out of history.
-assets_src/
+# Old tooling dependencies, not part of the Godot project
+node_modules/
