@@ -113,15 +113,11 @@ func _input(event: InputEvent) -> void:
 		if touch.pressed:
 			if _inside_action_buttons(touch.position):
 				return
-			if (
-				touch.position.x < viewport_size.x * 0.42
-				and touch.position.y > viewport_size.y * 0.48
-			):
+			if touch.position.x < viewport_size.x * 0.48:
 				active_move_touch = touch.index
-				stick_offset = (touch.position - stick_center).limit_length(62.0)
-				move_changed.emit(
-					Vector2(stick_offset.x / 62.0, -stick_offset.y / 62.0).limit_length(1.0)
-				)
+				stick_center = touch.position
+				stick_offset = Vector2.ZERO
+				move_changed.emit(Vector2.ZERO)
 				overlay.queue_redraw()
 				get_viewport().set_input_as_handled()
 			elif touch.position.x > viewport_size.x * 0.42:
@@ -141,7 +137,7 @@ func _input(event: InputEvent) -> void:
 		if drag.index == active_move_touch:
 			stick_offset = (drag.position - stick_center).limit_length(62.0)
 			move_changed.emit(
-				Vector2(stick_offset.x / 62.0, -stick_offset.y / 62.0).limit_length(1.0)
+				Vector2(stick_offset.x / 62.0, stick_offset.y / 62.0).limit_length(1.0)
 			)
 			overlay.queue_redraw()
 			get_viewport().set_input_as_handled()

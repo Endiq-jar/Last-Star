@@ -33,8 +33,8 @@ godot --path godot
 ```
 
 Controls: WASD to move, Space to jump, left mouse drag to orbit the camera; on
-touchscreens, use the left virtual joystick, right-side drag, and the on-screen
-RUN, SKILL, JUMP, and ATK buttons. Saves are kept in Godot's per-user
+touchscreens, touch and drag anywhere on the left half to move, drag the right
+half to look, and use the RUN, SKILL, JUMP, and ATK buttons. Saves are kept in Godot's per-user
 `user://last_star_godot.json` location. No network calls or analytics are used.
 
 ## Validation status
