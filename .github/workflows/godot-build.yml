@@ -120,7 +120,7 @@ jobs:
           set -uo pipefail
           mkdir -p builds/android
           set +e
-          godot --headless --verbose --path . --export-debug "Android" builds/android/LastStar-debug.apk > "$RUNNER_TEMP/godot-export.log" 2>&1
+          godot --headless --verbose --editor --path . --export-debug "Android" builds/android/LastStar-debug.apk > "$RUNNER_TEMP/godot-export.log" 2>&1
           export_status=$?
           set -e
           if [[ $export_status -ne 0 ]]; then
@@ -128,9 +128,12 @@ jobs:
             echo "### Android export failure (exit $export_status)" >> "$GITHUB_STEP_SUMMARY"
             echo "::error::Godot Android export exited with status $export_status"
             cat "$RUNNER_TEMP/godot-export.log" >> "$GITHUB_STEP_SUMMARY"
-            while IFS= read -r line; do
-              if [[ -n "$line" ]]; then echo "::error::$line"; fi
-            done < "$RUNNER_TEMP/godot-export.log"
+            matches="$(grep -Ein 'error|failed|not found|cannot|invalid|warning|exception|fatal' "$RUNNER_TEMP/godot-export.log" | tail -n 20 || true)"
+            if [[ -n "$matches" ]]; then
+              echo "::error::Godot export diagnostics: $matches"
+            else
+              echo "::error::Godot export exited $export_status without emitting an error or warning; see the diagnostic log artifact."
+            fi
             exit 1
           fi
           cat "$RUNNER_TEMP/godot-export.log"
@@ -139,6 +142,15 @@ jobs:
             find builds -maxdepth 4 -type f -printf '%p (%s bytes)\\n' || true
             exit 1
           fi
+
+      - name: Upload Godot export diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-export-diagnostics
+          path: ${{ runner.temp }}/godot-export.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
