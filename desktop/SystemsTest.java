@@ -3,6 +3,7 @@ import com.laststar.game.world.Boss;
 import com.laststar.game.world.CombatKit;
 import com.laststar.game.world.Enemy;
 import com.laststar.game.world.QuestLog;
+import com.laststar.game.world.Inventory;
 import com.laststar.game.world.Party;
 import com.laststar.game.world.SaveGame;
 import com.laststar.game.world.SpellBook;
@@ -11,6 +12,8 @@ import com.laststar.game.world.lore.Elaris;
 import com.laststar.game.world.lore.QuestCorpus;
 import com.laststar.game.world.lore.SpellCorpus;
 import com.laststar.game.world.lore.Companions;
+import com.laststar.game.world.lore.Gear;
+import com.laststar.game.world.lore.Dialogue;
 import com.laststar.game.world.lore.SpellForge;
 
 import java.io.IOException;
@@ -49,6 +52,7 @@ public final class SystemsTest {
         spellForge();
         companions();
         travel();
+        equipment();
 
         System.out.println(checks + " checks, " + failures + " failures");
         if (failures > 0) {
@@ -459,6 +463,130 @@ public final class SystemsTest {
         check("every region holds at least one page", everyRegionStocked);
     }
 
+    // -- equipment ------------------------------------------------------------
+
+    private static void equipment() {
+        System.out.println("Equipment");
+        check("there is gear to find", Gear.count() >= 10);
+        check("every piece names its effect", everyGearHasEffect());
+
+        Inventory inv = new Inventory();
+        check("nothing is owned at the start", inv.ownedCount() == 0);
+        check("nothing changes when nothing is worn",
+                inv.meleeMultiplier() == 1f && inv.healthBonus() == 0f);
+        check("you cannot wear what you do not own", !inv.toggle(0));
+
+        // Buying then wearing.
+        check("a piece can be acquired", inv.acquire(0));
+        check("acquiring twice does nothing", !inv.acquire(0));
+        check("wearing reports success", inv.toggle(0));
+        Gear.Def ember = Gear.get(0);
+        check("the worn piece is remembered", inv.worn(ember.slot) == ember);
+        check("worn gear changes the numbers",
+                inv.meleeMultiplier() > 1f && inv.healthBonus() < 0f);
+        // The second tap takes it off, which is how a player compares.
+        check("the second tap removes it", !inv.toggle(0));
+        check("removing restores the numbers",
+                inv.meleeMultiplier() == 1f && inv.healthBonus() == 0f);
+
+        // One per slot: wearing a second blade replaces the first.
+        inv.acquire(2);
+        inv.toggle(0);
+        inv.toggle(2);
+        check("a second blade replaces the first",
+                inv.worn(Gear.Slot.BLADE) == Gear.get(2));
+        check("only one blade is worn", inv.wornCount() == 1);
+
+        // All three slots stack.
+        inv.acquire(3);
+        inv.acquire(6);
+        inv.toggle(3);
+        inv.toggle(6);
+        check("three pieces can be worn at once", inv.wornCount() == 3);
+        check("modifiers combine", inv.healthBonus() + inv.lightBonus() > 0f);
+
+        // Gear makes a difference to the actual world.
+        World plain = new World(1L);
+        float plainHealth = plain.player.maxHealth;
+        float plainMelee = plain.inventory.meleeMultiplier();
+        check("a fresh player has no gear", plainMelee == 1f);
+
+        World armed = new World(1L);
+        armed.inventory.acquire(0);
+        armed.inventory.toggle(0);
+        armed.refreshEquipment();
+        check("wearing a blade changes the world's damage",
+                armed.inventory.meleeMultiplier() > 1f);
+        // EMBER trades health for damage; the world must reflect both sides.
+        check("and the trade is real", armed.player.maxHealth < plainHealth);
+
+        World warded = new World(1L);
+        warded.inventory.acquire(5);
+        warded.inventory.toggle(5);
+        warded.refreshEquipment();
+        check("a cloak raises health", warded.player.maxHealth > plainHealth);
+
+        World lit = new World(1L);
+        float baseLight = lit.spells.lightCapacity;
+        lit.inventory.acquire(6);
+        lit.inventory.toggle(6);
+        lit.refreshEquipment();
+        check("a relic raises the Light ceiling",
+                lit.spells.lightCapacity > baseLight);
+
+        // Taking gear off must not erase what quests gave.
+        World found = new World(1L);
+        found.spells.raiseCapacity(40f);
+        float earned = found.spells.lightCapacity;
+        found.inventory.acquire(6);
+        found.inventory.toggle(6);
+        found.refreshEquipment();
+        found.inventory.toggle(6);
+        found.refreshEquipment();
+        check("a quest reward survives removing a ring",
+                found.spells.lightCapacity >= earned - 0.01f);
+
+        // Equipment must survive a save.
+        try {
+            World saved = new World(9L);
+            saved.gold = 5000;
+            saved.inventory.acquire(0);
+            saved.inventory.toggle(0);
+            saved.inventory.acquire(3);
+            saved.refreshEquipment();
+            byte[] bytes = SaveGame.capture(saved).toBytes();
+            SaveGame loaded = SaveGame.fromBytes(bytes);
+            check("ownership saves", loaded.owned[0] && loaded.owned[3]);
+            check("what is worn saves", loaded.worn[Gear.Slot.BLADE.ordinal()] == 0);
+
+            World restored = new World(9L);
+            loaded.applyTo(restored);
+            check("loading restores what is worn",
+                    restored.inventory.isWorn(0));
+            check("loading restores the numbers",
+                    restored.inventory.meleeMultiplier() > 1f);
+        } catch (IOException e) {
+            check("a gear save round-trips", false);
+        }
+    }
+
+    private static boolean everyGearHasEffect() {
+        for (int i = 0; i < Gear.count(); i++) {
+            Gear.Def d = Gear.get(i);
+            if (d.name == null || d.name.length() < 3) {
+                return false;
+            }
+            // A piece with no effect is a picture, not equipment.
+            if ("NO EFFECT".equals(d.effectLine())) {
+                return false;
+            }
+            if (d.price <= 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // -- companions -----------------------------------------------------------
 
     private static void companions() {
@@ -528,6 +656,27 @@ public final class SystemsTest {
             }
         }
         check("there is a pair without a synergy", noSynergy >= 0);
+
+        // Every companion has two meaningful answers at every relationship stage.
+        boolean conversationsComplete = true;
+        for (int c = 0; c < Companions.count(); c++) {
+            for (Companions.Bond bond : Companions.Bond.values()) {
+                Dialogue.Node node = Dialogue.nodeFor(c, bond);
+                conversationsComplete &= node != null && node.choices.length == 2;
+                if (node != null) {
+                    conversationsComplete &= node.line != null && node.line.length() > 8;
+                    conversationsComplete &= node.choices[0].reply.length() > 4;
+                    conversationsComplete &= node.choices[1].reply.length() > 4;
+                }
+            }
+        }
+        check("dialogue has two complete choices at every bond", conversationsComplete);
+        check("unknown companion has no dialogue", Dialogue.nodeFor(-1,
+                Companions.Bond.STRANGER) == null);
+        check("journal consequence unlocks an aside", Dialogue.asideFor(0,
+                QuestCorpus.Consequence.SETTLEMENT_SAVED) != null);
+        check("no consequence has no aside", Dialogue.asideFor(0,
+                QuestCorpus.Consequence.NONE) == null);
 
         // Conversation choices move trust in both directions.
         Party talk = new Party();

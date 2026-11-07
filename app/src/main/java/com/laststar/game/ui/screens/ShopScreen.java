@@ -21,13 +21,87 @@ public final class ShopScreen implements Screen {
         this.world = world;
     }
 
+    /** Whether the player can afford the item at {@code index}. */
+    boolean affordable(int index) {
+        if (world == null || index < 0 || index >= PRICES.length) {
+            return false;
+        }
+        int id = stockId(index);
+        if (id >= 0 && world.inventory.has(id)) {
+            return true;
+        }
+        return world.gold >= PRICES[index];
+    }
+
+    /** The gear id of the item in the grid at {@code index}, or -1. */
+    static int stockId(int index) {
+        if (index < 0 || index >= STOCK.length || STOCK[index] == null) {
+            return -1;
+        }
+        return STOCK[index].id;
+    }
+
+    /**
+     * Buys, wears or removes the item at {@code index}.
+     *
+     * <p>One control, three states: PURCHASE, then WEAR, then REMOVE. A player
+     * comparing two blades wants the difference immediately rather than a trip
+     * to another screen.</p>
+     */
+    public boolean buy(int index) {
+        if (world == null || index < 0 || index >= PRICES.length) {
+            return false;
+        }
+        int id = stockId(index);
+        if (id < 0) {
+            return false;
+        }
+        if (world.inventory.has(id)) {
+            boolean worn = world.inventory.toggle(id);
+            world.refreshEquipment();
+            world.showMessage(worn ? STOCK[index].name + " WORN"
+                    : STOCK[index].name + " REMOVED", 1.4f, 0.4f);
+            return true;
+        }
+        if (world.gold < PRICES[index]) {
+            world.showMessage("NOT ENOUGH COIN", 1.2f, 0.4f);
+            return false;
+        }
+        world.gold -= PRICES[index];
+        world.inventory.acquire(id);
+        world.inventory.toggle(id);
+        world.refreshEquipment();
+        world.showMessage("BOUGHT -- " + STOCK[index].name + " WORN", 1.8f, 0.5f);
+        return true;
+    }
+
+    /** The real stock: eight pieces of equipment with actual effects. */
+    private static final com.laststar.game.world.lore.Gear.Def[] STOCK = {
+            com.laststar.game.world.lore.Gear.get(0),   // EMBER
+            com.laststar.game.world.lore.Gear.get(6),   // LANTERN
+            com.laststar.game.world.lore.Gear.get(7),   // SHARD
+            com.laststar.game.world.lore.Gear.get(11),  // GLASS
+            com.laststar.game.world.lore.Gear.get(3),   // CLOAK
+            com.laststar.game.world.lore.Gear.get(8),   // SEAL
+            com.laststar.game.world.lore.Gear.get(9),   // COMPASS
+            com.laststar.game.world.lore.Gear.get(10)   // HORN
+    };
+
     private static final String[] NAMES = {
             "EMBER", "LANTERN", "SHARD", "GLASS",
             "CLOAK", "SEAL", "COMPASS", "HORN"
     };
     private static final String[] KINDS = {"BLADE", "LIGHT", "RELIC", "TOKEN",
             "CLOAK", "SEAL", "TOOL", "HORN"};
-    private static final int[] PRICES = {1200, 650, 2400, 180, 900, 340, 480, 260};
+    private static final int[] PRICES = pricesFromStock();
+
+    private static int[] pricesFromStock() {
+        int[] out = new int[STOCK.length];
+        for (int i = 0; i < STOCK.length; i++) {
+            out[i] = STOCK[i] == null ? 0 : STOCK[i].price;
+        }
+        return out;
+    }
     private static final String[] DESCRIPTIONS = {
             "A BLADE THAT REMEMBERS THE SUN.",
             "BURNS LOW, BUT NEVER GOES OUT.",
@@ -133,7 +207,17 @@ public final class ShopScreen implements Screen {
             GenshinKit.coin(b, cx2 - rowW * 0.5f + 4f, y + ch - 13f, 5f, alpha);
             b.textSpaced(price, priceX, y + ch - 17f, 1, 0.4f,
                     Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1], Style.GOLD_LIGHT[2], alpha, font);
-            if (i >= 6) {
+
+            // Owned and worn items say so rather than showing a price.
+            boolean owned = world != null && STOCK[i] != null
+                    && world.inventory.has(STOCK[i].id);
+            if (owned) {
+                boolean worn = world.inventory.isWorn(STOCK[i].id);
+                b.textSpacedCentred(worn ? "WORN" : "OWNED", cx2, y + ch - 13f, 1, 0.8f,
+                        Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1], Style.GOLD_LIGHT[2],
+                        alpha, font);
+            }
+            if (i >= 6 && !owned) {
                 // Locked: veil the card and stamp a lock in the middle.
                 b.quad(x + 2f, y + 2f, cw - 4f, ch - 4f, 0.02f, 0.03f, 0.05f, 0.52f * alpha);
                 GenshinKit.padlock(b, cx2, y + 22f, 12f, alpha);
@@ -148,10 +232,15 @@ public final class ShopScreen implements Screen {
                 0.86f * alpha, Style.SLATE[0] * 0.7f, Style.SLATE[1] * 0.7f,
                 Style.SLATE[2] * 0.7f, 0.9f * alpha);
         GenshinKit.innerFrame(b, dx, dy, dw, 44f, alpha * 0.6f);
-        String heading = NAMES[selected] + "  -  " + KINDS[selected];
+        com.laststar.game.world.lore.Gear.Def item = STOCK[selected];
+        String heading = NAMES[selected] + "  -  "
+                + (item == null ? KINDS[selected] : item.slot.name());
         b.textSpaced(heading, dx + 14f, dy + 8f, 1, 1.0f,
                 Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1], Style.GOLD_LIGHT[2], alpha, font);
-        String desc = DESCRIPTIONS[selected];
+        // The effect line replaces the flavour as the important text: a player
+        // spending coin needs to know what they get, not what it looks like.
+        String desc = item == null ? DESCRIPTIONS[selected]
+                : item.effectLine();
         float room = dw - 168f;
         int fit = (int) (room / 5.6f);
         if (desc.length() > fit && fit > 4) {
@@ -163,8 +252,11 @@ public final class ShopScreen implements Screen {
         // Buy button.
         float bx = dx + dw - 66f;
         float by = dy + 22f;
+        boolean has = world != null && item != null && world.inventory.has(item.id);
         GenshinKit.lozenge(b, bx, by, 106f, 28f, true, buyPress, alpha);
-        b.textSpacedCentred("PURCHASE", bx, by - font.capHeight(1) * 0.5f, 1, 1.4f,
+        String verb = has ? (world.inventory.isWorn(item.id) ? "REMOVE" : "WEAR")
+                : "PURCHASE";
+        b.textSpacedCentred(verb, bx, by - font.capHeight(1) * 0.5f, 1, 1.4f,
                 Style.IVORY[0], Style.IVORY[1], Style.IVORY[2], alpha, font);
 
         // Merchant figure on the right.
@@ -300,6 +392,8 @@ public final class ShopScreen implements Screen {
         float dw = w * 0.585f;
         if (Math.abs(x - (dx + dw - 66f)) < 55f && Math.abs(y - (dy + 22f)) < 18f) {
             buyPress = 1f;
+            // Purchase, wear or remove -- the button's three states.
+            buy(selected);
             return Action.NONE;
         }
         return Action.NONE;

@@ -170,6 +170,10 @@ public final class TravelScreen implements Screen {
 
         drawDetail(b, font, alpha, w, h);
 
+        // A pair of figures on the far control, since it now opens the company.
+        b.circle(w - 33f, 23f, 3.2f, 10, 1f, 0.92f, 0.70f, alpha);
+        b.circle(w - 27f, 23f, 3.2f, 10, 1f, 0.92f, 0.70f, alpha * 0.8f);
+        b.quad(w - 37f, 27f, 14f, 3f, 1f, 0.92f, 0.70f, alpha * 0.85f);
         GenshinKit.roundButton(b, w - 30f, 26f, 15f, 0f, alpha);
         b.line(w - 35f, 21f, w - 25f, 31f, 2.2f, Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1],
                 Style.GOLD_LIGHT[2], alpha);
@@ -324,7 +328,9 @@ public final class TravelScreen implements Screen {
             return Action.NONE;
         }
         if (Math.abs(x - (w - 30f)) < 20f && Math.abs(y - 26f) < 20f) {
-            return Action.BACK;
+            // The map's far control opens the company: who is with you and
+            // where you are going are the same decision.
+            return Action.OPEN_COMPANY;
         }
         return Action.NONE;
     }

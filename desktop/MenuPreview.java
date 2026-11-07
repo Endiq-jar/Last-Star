@@ -39,6 +39,9 @@ public final class MenuPreview {
         shoot(outDir, w, h, "spells-all", Menu.Page.SPELLS, "all");
         shoot(outDir, w, h, "forge", Menu.Page.FORGE, null);
         shoot(outDir, w, h, "travel", Menu.Page.TRAVEL, null);
+        shoot(outDir, w, h, "company", Menu.Page.COMPANY, null);
+        shoot(outDir, w, h, "company-talk", Menu.Page.COMPANY, "talk");
+        shoot(outDir, w, h, "company-met", Menu.Page.COMPANY, "met");
         shoot(outDir, w, h, "font-sheet", Menu.Page.HOME, "font");
 
         System.out.println("menu previews written to " + outDir);
@@ -69,6 +72,11 @@ public final class MenuPreview {
                     previewWorld.quests.openQuests().get(0);
             previewWorld.quests.report(q2.def.kind, q2.def.subject, q2.def.target);
         }
+        if ("met".equals(variant)) {
+            // KESH joins in LUNARETH; recruit before binding so the whole card
+            // is exercised rather than the locked state.
+            previewWorld.party.recruit(1);
+        }
         menu.bind(previewWorld);
         // Jump straight to the page, then let everything settle.
         menu.page = page;
@@ -86,6 +94,13 @@ public final class MenuPreview {
             for (int i = 0; i < 10; i++) {
                 menu.update(1f / 60f);
             }
+        } else if ("met".equals(variant)) {
+            menu.company.selected = 1;
+            menu.company.update(1f / 60f);
+        } else if ("talk".equals(variant)) {
+            menu.company.selected = 0;
+            menu.company.talking = true;
+            menu.update(1f / 60f);
         } else if ("all".equals(variant)) {
             menu.tap(720 * 0.215f + 1 * 720 * 0.142f, 405 * 0.175f, 720, 405);
             menu.update(1f / 60f);

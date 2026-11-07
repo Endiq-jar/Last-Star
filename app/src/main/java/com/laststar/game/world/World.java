@@ -76,6 +76,8 @@ public final class World {
     public final CombatKit combat = new CombatKit();
     /** Who travels with the player, and how far they trust them. */
     public final Party party = new Party();
+    /** What the player owns and is wearing. */
+    public final Inventory inventory = new Inventory();
     /** The region's boss, once it has been woken. */
     public Boss boss;
     /** Where the boss stands, or null before it wakes. */
@@ -195,6 +197,25 @@ public final class World {
             }
         }
         showMessage(region.name + " -- " + region.identity, 2.8f, 0.6f);
+    }
+
+    /**
+     * Applies the worn equipment's permanent modifiers.
+     *
+     * <p>Called after any change of equipment rather than every frame, so the
+     * player's health ceiling and the book's Light ceiling follow what is worn
+     * without those systems having to know equipment exists.</p>
+     */
+    public void refreshEquipment() {
+        float bonus = inventory.healthBonus();
+        player.maxHealth = 120f + bonus;
+        player.health = Math.min(player.health, player.maxHealth);
+        // Light capacity is a base plus finds plus what is worn. Kept as a
+        // separate base so taking a ring off does not erase a quest reward.
+        spells.lightCapacity = Math.max(20f,
+                spells.baseLightCapacity() + inventory.lightBonus());
+        spells.light = Math.min(spells.light, spells.lightCapacity);
+        spells.regenMultiplier = inventory.regenMultiplier();
     }
 
     /** Adds coin, from a kill, a quest or a find. */
@@ -797,7 +818,7 @@ public final class World {
                     continue;
                 }
                 if (e.centre().sub(player.centre()).horizontalLength() < 4f) {
-                    damageEnemy(e, page.damage());
+                    damageEnemy(e, page.damage() * inventory.spellMultiplier());
                     applyTraits(page, e);
                     hits++;
                 }
@@ -827,7 +848,7 @@ public final class World {
                     continue;
                 }
             }
-            damageEnemy(e, page.damage());
+            damageEnemy(e, page.damage() * inventory.spellMultiplier());
             applyTraits(page, e);
             hits++;
         }
@@ -896,7 +917,7 @@ public final class World {
             if (e.centre().sub(origin).horizontalLength() > spell.range + e.radius) {
                 continue;
             }
-            damageEnemy(e, page.damage());
+            damageEnemy(e, page.damage() * inventory.spellMultiplier());
             applyTraits(page, e);
             hits++;
         }
@@ -924,7 +945,7 @@ public final class World {
                 continue;
             }
             if (distanceToSegment(e.position, from, to) < 2.6f + e.radius) {
-                damageEnemy(e, page.damage());
+                damageEnemy(e, page.damage() * inventory.spellMultiplier());
                 applyTraits(page, e);
                 hits++;
             }
@@ -955,7 +976,7 @@ public final class World {
             if (flat.dot(facing) < 0.72f) {
                 continue;
             }
-            damageEnemy(e, page.damage());
+            damageEnemy(e, page.damage() * inventory.spellMultiplier());
             applyTraits(page, e);
             hits++;
         }
@@ -973,7 +994,7 @@ public final class World {
                 continue;
             }
             if (e.centre().sub(at).horizontalLength() < 4.5f) {
-                damageEnemy(e, page.damage());
+                damageEnemy(e, page.damage() * inventory.spellMultiplier());
                 applyTraits(page, e);
                 hits++;
             }
@@ -993,7 +1014,7 @@ public final class World {
             if (e.centre().sub(player.centre()).horizontalLength() > spell.range) {
                 continue;
             }
-            damageEnemy(e, page.damage());
+            damageEnemy(e, page.damage() * inventory.spellMultiplier());
             applyTraits(page, e);
             hits++;
             if (hits >= 2) {
@@ -1177,7 +1198,8 @@ public final class World {
         Vec3 facing = new Vec3((float) Math.sin(Math.toRadians(player.yaw)), 0f,
                 (float) Math.cos(Math.toRadians(player.yaw)));
         float reach = combat.lastRange + (player.onGround ? 0f : 1.2f);
-        float base = Player.MELEE_DAMAGE * combat.damageScale();
+        float base = Player.MELEE_DAMAGE * combat.damageScale()
+                * inventory.meleeMultiplier();
         float arc = combat.staggers()
                 ? Player.MELEE_ARC_DEGREES * 0.5f + 30f
                 : Player.MELEE_ARC_DEGREES * 0.5f;

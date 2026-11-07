@@ -104,6 +104,20 @@ public final class SpellBook {
     public float light = BASE_LIGHT;
     /** Maximum Light, raised by quests and progression. */
     public float lightCapacity = BASE_LIGHT;
+    /**
+     * Capacity from progress alone, before anything worn.
+     *
+     * <p>Kept separately so taking off a ring cannot erase a quest reward:
+     * equipment adds to this, and this is what the quests raise.</p>
+     */
+    private float baseCapacity = BASE_LIGHT;
+
+    /** The capacity earned by progress, without equipment. */
+    public float baseLightCapacity() {
+        return baseCapacity;
+    }
+    /** Multiplier on regeneration, set by the world from worn equipment. */
+    public float regenMultiplier = 1f;
     /** Set when a cast was refused for lack of Light, for the HUD to flash. */
     public float lightStarved;
     /** Index of the page cast this frame, or -1. */
@@ -170,7 +184,8 @@ public final class SpellBook {
 
     /** Advances regeneration, cooldowns and passive mastery. */
     public void tick(float dt) {
-        light = Math.min(lightCapacity, light + LIGHT_REGEN * dt);
+        light = Math.min(lightCapacity,
+                light + LIGHT_REGEN * regenMultiplier * dt);
         if (lightStarved > 0f) {
             lightStarved = Math.max(0f, lightStarved - dt);
         }
@@ -321,8 +336,14 @@ public final class SpellBook {
 
     /** Raises the Light ceiling, from a quest reward. */
     public void raiseCapacity(float amount) {
+        baseCapacity = Math.min(400f, baseCapacity + amount);
         lightCapacity = Math.min(400f, lightCapacity + amount);
         light = Math.min(lightCapacity, light + amount);
+    }
+
+    /** Sets the progress-earned capacity directly, when loading a save. */
+    public void restoreBaseCapacity(float value) {
+        baseCapacity = Math.max(20f, value);
     }
 
     /** Restores Light from a pickup and teaches every page something. */

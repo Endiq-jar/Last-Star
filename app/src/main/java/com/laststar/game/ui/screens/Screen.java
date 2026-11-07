@@ -19,6 +19,8 @@ public interface Screen {
         OPEN_FORGE,
         /** Asks the menu to open the map. */
         OPEN_TRAVEL,
+        /** Asks the menu to open the company screen. */
+        OPEN_COMPANY,
         BACK
     }
 

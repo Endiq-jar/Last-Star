@@ -1,6 +1,7 @@
 package com.laststar.game.world;
 
 import com.laststar.game.world.lore.QuestCorpus;
+import com.laststar.game.world.lore.Gear;
 import com.laststar.game.world.lore.SpellCorpus;
 
 import java.io.ByteArrayInputStream;
@@ -27,7 +28,7 @@ import java.io.IOException;
 public final class SaveGame {
 
     /** Bumped whenever the layout changes, so an old save is rejected cleanly. */
-    public static final int VERSION = 1;
+    public static final int VERSION = 2;
     private static final int MAGIC = 0x4C535356;   // "LSSV"
 
     // --- what is saved -------------------------------------------------------
@@ -53,6 +54,11 @@ public final class SaveGame {
     public final int[] questProgress = new int[QuestCorpus.count()];
     /** Consequence flags. */
     public final boolean[] flags = new boolean[QuestCorpus.Consequence.values().length];
+    /** Owned equipment, and which slot each worn piece occupies. */
+    public final boolean[] owned = new boolean[Gear.count()];
+    public final int[] worn = {-1, -1, -1};
+    /** Light capacity from progress alone, before equipment. */
+    public float baseCapacity;
 
     private SaveGame() {
     }
@@ -68,6 +74,7 @@ public final class SaveGame {
         s.shardsCollected = world.shardsCollected;
         s.runsCompleted = world.runsCompleted;
         s.lightCapacity = world.spells.lightCapacity;
+        s.baseCapacity = world.spells.baseLightCapacity();
         s.playerX = world.player.position.x;
         s.playerY = world.player.position.y;
         s.playerZ = world.player.position.z;
@@ -88,6 +95,12 @@ public final class SaveGame {
         }
         for (int i = 0; i < s.flags.length; i++) {
             s.flags[i] = world.quests.has(QuestCorpus.Consequence.values()[i]);
+        }
+        for (int i = 0; i < s.owned.length; i++) {
+            s.owned[i] = world.inventory.owned[i];
+        }
+        for (int i = 0; i < s.worn.length; i++) {
+            s.worn[i] = world.inventory.worn[i];
         }
         return s;
     }
@@ -137,6 +150,14 @@ public final class SaveGame {
             for (int i = 0; i < flags.length; i++) {
                 out.writeBoolean(flags[i]);
             }
+            out.writeInt(owned.length);
+            for (int i = 0; i < owned.length; i++) {
+                out.writeBoolean(owned[i]);
+            }
+            for (int i = 0; i < worn.length; i++) {
+                out.writeInt(worn[i]);
+            }
+            out.writeFloat(baseCapacity);
             out.flush();
         } catch (IOException e) {
             // A ByteArrayOutputStream cannot fail; this is unreachable but the
@@ -207,6 +228,18 @@ public final class SaveGame {
         for (int i = 0; i < flagCount; i++) {
             s.flags[i] = in.readBoolean();
         }
+        int gearCount = in.readInt();
+        if (gearCount != s.owned.length) {
+            throw new IOException("save has " + gearCount + " items, expected "
+                    + s.owned.length);
+        }
+        for (int i = 0; i < gearCount; i++) {
+            s.owned[i] = in.readBoolean();
+        }
+        for (int i = 0; i < s.worn.length; i++) {
+            s.worn[i] = in.readInt();
+        }
+        s.baseCapacity = in.readFloat();
         return s;
     }
 
@@ -247,6 +280,15 @@ public final class SaveGame {
         for (int i = 0; i < flags.length; i++) {
             world.quests.setFlag(QuestCorpus.Consequence.values()[i], flags[i]);
         }
+        for (int i = 0; i < owned.length && i < world.inventory.owned.length; i++) {
+            world.inventory.owned[i] = owned[i];
+        }
+        for (int i = 0; i < worn.length && i < world.inventory.worn.length; i++) {
+            world.inventory.worn[i] = worn[i];
+        }
+        world.spells.restoreBaseCapacity(baseCapacity);
+        // The ceilings follow what is worn, so this has to run last.
+        world.refreshEquipment();
         world.player.position = new com.laststar.game.core.Vec3(playerX, playerY, playerZ);
         world.player.yaw = playerYaw;
         // Open anything the restored state has made available, so a loaded

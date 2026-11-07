@@ -8,6 +8,7 @@ import com.laststar.game.ui.screens.Screen;
 import com.laststar.game.ui.screens.SettingsScreen;
 import com.laststar.game.ui.screens.ShopScreen;
 import com.laststar.game.ui.screens.ForgeScreen;
+import com.laststar.game.ui.screens.CompanionsScreen;
 import com.laststar.game.ui.screens.TravelScreen;
 import com.laststar.game.ui.screens.SpellScreen;
 import com.laststar.game.ui.screens.WardrobeScreen;
@@ -36,7 +37,9 @@ public final class Menu {
         /** Spell creation, reached from the Wander. */
         FORGE,
         /** The map of Elaris, reached from the journal. */
-        TRAVEL
+        TRAVEL,
+        /** The company: companions, bonds and conversations. */
+        COMPANY
     }
 
     private final TabBar tabs = new TabBar();
@@ -49,6 +52,7 @@ public final class Menu {
     public final SpellScreen spellScreen = new SpellScreen();
     public final ForgeScreen forge = new ForgeScreen();
     public final TravelScreen travel = new TravelScreen();
+    public final CompanionsScreen company = new CompanionsScreen();
     public final WardrobeScreen wardrobe = new WardrobeScreen();
     public final SettingsScreen settings = new SettingsScreen();
 
@@ -75,6 +79,7 @@ public final class Menu {
         spellScreen.bind(world);
         forge.bind(world);
         travel.bind(world);
+        company.bind(world);
     }
 
     public Menu() {
@@ -152,6 +157,10 @@ public final class Menu {
                 shown = travel;
                 tabs.setActive(TabBar.Tab.QUESTS);
                 break;
+            case COMPANY:
+                shown = company;
+                tabs.setActive(TabBar.Tab.QUESTS);
+                break;
             case SPELLS:
                 shown = spellScreen;
                 // The book has no tab of its own; the journal's stays lit so
@@ -188,6 +197,7 @@ public final class Menu {
             case SPELLS:
             case FORGE:
             case TRAVEL:
+            case COMPANY:
                 return Backdrop.Id.WARDROBE;
             case SHOP:
                 return Backdrop.Id.SHOP;
@@ -219,6 +229,10 @@ public final class Menu {
             show(Page.TRAVEL);
             return true;
         }
+        if (action == Screen.Action.OPEN_COMPANY) {
+            show(Page.COMPANY);
+            return true;
+        }
         if (action == Screen.Action.OPEN_SPELLS) {
             show(Page.SPELLS);
             // The book has no tab of its own, so the journal's tab stays lit:
@@ -232,7 +246,9 @@ public final class Menu {
         }
         if (action == Screen.Action.BACK) {
             // Back out of the book to the journal it was opened from.
-            if (page == Page.TRAVEL) {
+            if (page == Page.COMPANY) {
+                show(Page.TRAVEL);
+            } else if (page == Page.TRAVEL) {
                 show(Page.QUESTS);
             } else if (page == Page.FORGE) {
                 show(Page.SPELLS);
@@ -296,6 +312,10 @@ public final class Menu {
                 break;
             case TRAVEL:
                 shown = travel;
+                tabs.setActive(TabBar.Tab.QUESTS);
+                break;
+            case COMPANY:
+                shown = company;
                 tabs.setActive(TabBar.Tab.QUESTS);
                 break;
             case SPELLS:
