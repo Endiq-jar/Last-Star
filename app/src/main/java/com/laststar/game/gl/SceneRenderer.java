@@ -339,17 +339,23 @@ public final class SceneRenderer {
      * gets zero so rocks and buildings stay rigid.
      */
     private float swayFor(int modelIndex) {
-        switch (models.get(modelIndex).role) {
+        // A fraction of the model's own height. The imported pack is authored
+        // at wildly different scales (a 2.5 m grass patch, an 8.5 m tree), so a
+        // fixed metre figure either slides the wide props across the ground or
+        // is invisible on the tall ones.
+        ModelLibrary.Model m = models.get(modelIndex);
+        float h = m.height();
+        switch (m.role) {
             case ModelLibrary.GRASS:
-                return 0.075f;
+                return h * 0.10f;
             case ModelLibrary.FLOWER:
-                return 0.060f;
+                return h * 0.09f;
             case ModelLibrary.PLANT:
-                return 0.045f;
+                return h * 0.045f;
             case ModelLibrary.MUSHROOM:
-                return 0.022f;
+                return h * 0.03f;
             case ModelLibrary.TREE:
-                return 0.018f;
+                return h * 0.010f;
             default:
                 return 0f;
         }
@@ -359,12 +365,13 @@ public final class SceneRenderer {
     private float drawDistance(int modelIndex) {
         switch (models.get(modelIndex).role) {
             case ModelLibrary.GRASS:
-                // Grass is 0.8 m tall and the weather shader turns the terrain
-                // itself green, so drawing it past twenty metres costs a
-                // thousand draw calls to render detail no one can resolve.
-                return 22f;
+                // Past about fourteen metres a grass clump is a couple of
+                // pixels, and the terrain's own meadow colour is already under
+                // it. Culling here is what keeps the draw count in the low
+                // thousands while the ground is still carpeted where it counts.
+                return 14f;
             case ModelLibrary.FLOWER:
-                return 26f;
+                return 20f;
             case ModelLibrary.MUSHROOM:
                 return 30f;
             case ModelLibrary.PLANT:

@@ -135,6 +135,7 @@ public final class PropPlanner {
 
     public PropPlanner(ModelLibrary models, Terrain terrain, long seed) {
         this.terrain = terrain;
+        this.library = models;
         int cols = 16;
         grid = new Grid(terrain.size / cols, -terrain.size * 0.5f, -terrain.size * 0.5f,
                 cols, cols);
@@ -400,9 +401,9 @@ public final class PropPlanner {
         // after 16k grass clumps finds almost every candidate blocked and
         // silently disappears; scattering the tall things first and letting
         // grass fill in around them is what keeps every asset present.
+        scatterPack(models, terrain, seed + 5537, "pk_rock2", 5000, 3.4f, 8f);
         scatterPack(models, terrain, seed + 5521, "pk_bush", 5200, 2.4f, 6f);
         scatterPack(models, terrain, seed + 5533, "pk_rock", 2200, 3.0f, 7f);
-        scatterPack(models, terrain, seed + 5537, "pk_rock2", 1400, 3.4f, 8f);
         scatterPack(models, terrain, seed + 5519, "pk_flower", 3400, 0.50f, 3.6f);
         scatterPack(models, terrain, seed + 5507, "pk_flowers", 5200, 0.55f, 3.2f);
         scatterPack(models, terrain, seed + 5531, "pk_pebbles", 3200, 0.80f, 2.2f);
@@ -413,7 +414,7 @@ public final class PropPlanner {
         // the ground. What makes it grass is overlap -- small patches packed
         // until they merge into a carpet, with the terrain's own meadow colour
         // showing through the gaps.
-        scatterPack(models, terrain, seed + 5501, "pk_grass", 90000, 0.34f, 2.4f);
+        scatterPack(models, terrain, seed + 5501, "pk_grass", 40000, 0.55f, 2.4f);
     }
 
     /** One named pack model scattered over dry open ground. */
@@ -865,6 +866,52 @@ public final class PropPlanner {
     }
 
     /** Total instances in the plan, landmarks included. */
+    /**
+     * How many instances of the named model are in the world.
+     *
+     * <p>Used by the placement tests to assert that every imported asset is
+     * actually in the terrain. A scatterer that finds no room returns quietly,
+     * so counting is the only way to notice.</p>
+     */
+    public int countNamed(String modelName) {
+        int index = indexOfNamed(modelName);
+        if (index < 0) {
+            return 0;
+        }
+        int n = 0;
+        for (int i = 0; i < landmarks.size(); i++) {
+            if (landmarks.get(i).model == index) {
+                n++;
+            }
+        }
+        for (int cz = 0; cz < grid.rows(); cz++) {
+            for (int cx = 0; cx < grid.cols(); cx++) {
+                java.util.List<Instance> cell = grid.cell(cx, cz);
+                for (int i = 0; i < cell.size(); i++) {
+                    if (cell.get(i).model == index) {
+                        n++;
+                    }
+                }
+            }
+        }
+        return n;
+    }
+
+    /** Model index for a name, or -1. Needs the library, so it is cached. */
+    private java.util.Map<String, Integer> nameToIndex;
+    private ModelLibrary library;
+
+    private int indexOfNamed(String modelName) {
+        if (nameToIndex == null) {
+            nameToIndex = new java.util.HashMap<String, Integer>();
+            for (int i = 0; i < library.size(); i++) {
+                nameToIndex.put(library.get(i).name, Integer.valueOf(i));
+            }
+        }
+        Integer found = nameToIndex.get(modelName);
+        return found == null ? -1 : found.intValue();
+    }
+
     public int count() {
         int n = landmarks.size();
         for (int cz = 0; cz < grid.rows(); cz++) {

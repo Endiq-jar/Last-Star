@@ -49,7 +49,7 @@ ASSETS = [
     # ground, which is exactly how it looked. These are the heights each thing
     # should stand at in metres.
     ('Pebbles01.fbx',  'pebbles',    ROCK,     0.14, (0.64, 0.63, 0.66), 'height'),
-    ('Grass01.fbx',    'grass',      GRASS,    0.72, (0.42, 0.70, 0.34), 'height'),
+    ('Grass01.fbx',    'grass',      GRASS,    0.95, (0.42, 0.70, 0.34), 'height'),
     ('Flower01.fbx',   'flower',     FLOWER,   0.52, (0.88, 0.46, 0.74), 'height'),
     ('Flowers01.fbx',  'flowers',    FLOWER,   0.44, (0.95, 0.74, 0.36), 'height'),
     ('Bridge01.fbx',   'bridge',     PATH,    14.0, (0.62, 0.48, 0.32), 'span'),

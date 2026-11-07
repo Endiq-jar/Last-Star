@@ -281,6 +281,46 @@ public final class HeadlessTest {
         check(countHighPlaced(planner) > 30,
                 "rock spires stand in the world ("
                         + countHighPlaced(planner) + " elevated blocks)");
+
+        // Every asset in the imported pack has to be in the terrain. This is
+        // the acceptance criterion for the pack import, and it is easy to break
+        // silently: a scatterer that runs out of room, or one that is placed
+        // after something denser has claimed the ground, simply returns without
+        // placing anything and nothing complains.
+        String[][] required = {
+                {"pk_tree", "tree"},
+                {"pk_bush", "bush"},
+                {"pk_grass", "grass"},
+                {"pk_flower", "flower"},
+                {"pk_flowers", "flowers"},
+                {"pk_rock", "rock"},
+                {"pk_rock2", "rock2"},
+                {"pk_pebbles", "pebbles"},
+        };
+        for (String[] pair : required) {
+            int n = planner.countNamed(pair[0]);
+            check(n > 50, pair[1] + " is scattered through the world (" + n + ")");
+        }
+        // Mountains and bridges are landmarks rather than scatter: few, large,
+        // and placed deliberately.
+        check(planner.countNamed("pk_mountain") >= 12,
+                "mountains ring the horizon (" + planner.countNamed("pk_mountain") + ")");
+        check(planner.countNamed("pk_bridge") >= 1,
+                "bridges cross the water (" + planner.countNamed("pk_bridge") + ")");
+        // The Wander is a single object the world places by hand, never a
+        // scattered prop. One copy, in World.wanderPosition.
+        check(planner.countNamed("pk_spell-book") == 0,
+                "the Wander is not scattered as scenery");
+
+        // Ground cover has to be dense enough to read as a carpet rather than
+        // as scattered decorations; this is the "grass everywhere" criterion.
+        check(planner.countNamed("pk_grass") > 8000,
+                "grass blankets the ground (" + planner.countNamed("pk_grass") + ")");
+
+        // And the whole thing has to stay inside a frame budget. The renderer
+        // culls individual instances, so what matters is the total population.
+        check(planner.count() < 60000,
+                "world stays inside its prop budget (" + planner.count() + ")");
     }
 
     /** Instances that sit well above their own footprint, i.e. stacked spires. */
