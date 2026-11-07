@@ -1,0 +1,8 @@
+[gd_resource type="StandardMaterial3D" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/terrain3d/foliage/pine_bark.png" id="1_bark"]
+
+[resource]
+albedo_texture = ExtResource("1_bark")
+roughness = 1.0
+uv1_scale = Vector3(1.0, 1.0, 1.0)

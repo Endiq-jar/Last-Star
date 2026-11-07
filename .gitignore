@@ -1,0 +1,30 @@
+# Godot editor/import cache
+.godot/
+.import/
+*.translation
+.mono/
+
+# Godot exports and local build output
+/build/
+/builds/
+/export.cfg
+/export_credentials.cfg
+*.apk
+*.aab
+*.idsig
+
+# Local signing materials (never commit private keys)
+keystore/
+*.jks
+*.keystore
+
+# Editor and OS noise
+.idea/
+.vscode/
+*.iml
+*.userprefs
+.DS_Store
+Thumbs.db
+
+# Old tooling dependencies, not part of the Godot project
+node_modules/
