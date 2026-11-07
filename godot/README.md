@@ -1,104 +1,51 @@
-# Adventure-Game
+# Last Star — Godot runtime
 
-**An open-world Godot 4.x terrain exploration demo** — endless procedurally generated worlds with six distinct biomes, real-time chunk streaming, shader-animated vegetation, and a minimap.
+This folder contains the active GDScript implementation of Last Star's Godot
+migration. The active scene is `scenes/last_star.tscn`; the project does not use
+C# or another game-engine runtime.
 
-Built with C# and Godot's FastNoiseLite for seamless, fully deterministic procedural generation.
+## Current gameplay slice
 
-![Free-camera view](assets/screenshots/screenshot-camera.png)
+- Deterministic noise-based terrain streamed in a 7-by-7 chunk window around the
+  player, with chunks regenerated from world coordinates as the player travels.
+- Per-chunk MultiMesh trees and rocks, a winding footpath, river channel, and a
+  ridge settlement near the starting area.
+- Third-person movement, jump, sprint, orbit camera, mobile joystick/buttons,
+  and desktop keyboard/mouse input.
+- Six collectible shards, a simple melee/skill combat loop, and one Warden
+  encounter unlocked after collecting the shards.
+- Day/night lighting and a local JSON save with SHA-256 validation and
+  temporary-file replacement.
 
-![Player view](assets/screenshots/screenshot-player.png)
+This is not yet a feature-complete port of the existing Last Star game. The full
+spell corpus, equipment/inventory, companion and quest systems, menu screens,
+region variety, character animation, and production Android export are still
+unfinished. The finite settlement/river dressing currently only covers the
+starting region; terrain itself streams beyond it.
 
----
+## Run locally
 
-## Features
+Install the standard Godot 4.7 or newer editor/runtime, then open this folder or
+run:
 
-- **Endless procedural terrain** — seamless chunk-based generation that streams in around the player
-- **6 biomes** — ocean, grassland, forest, mountain, snow, desert, each with its own height curve, moisture/temperature-driven placement, and terrain texturing
-- **Shader-animated grass** — thousands of GPU-instanced grass blades that sway in the wind with noise-based height/color variation, anchored to the terrain surface
-- **Decoration framework** — biome-aware placement of trees, stones, plants, and grass; ships with simple primitive placeholder meshes you can swap for your own models
-- **Water plane** that follows terrain contours
-- **On-the-fly chunk threading** — terrain is generated on background threads with deferred main-thread assignment
-- **Minimap overlay** that renders the procedural world
-- **Debug overlay** — FPS, player position, biome, and terrain info
-
-## Requirements
-
-| Tool | Version |
-|------|---------|
-| [Godot](https://godotengine.org/download) | 4.7 **mono/.NET edition** |
-| [.NET SDK](https://dotnet.microsoft.com/download) | 8.0+ |
-
-## Quick Start
-
-```bash
-git clone <your-repo-url>
-cd Adventure-Game
+```sh
+godot --path godot
 ```
 
-1. Open the project in the **Godot .NET editor** (`godot --editor --path .`)
-2. Build from the editor or run:
-   ```bash
-   dotnet build
-   ```
-3. Press **Play** (or run `godot --path .`)
+Controls: WASD to move, Space to jump, left mouse drag to orbit the camera; on
+touchscreens, use the left virtual joystick, right-side drag, and the on-screen
+RUN, SKILL, JUMP, and ATK buttons. Saves are kept in Godot's per-user
+`user://last_star_godot.json` location. No network calls or analytics are used.
 
-### Optional: standalone binary (Linux)
+## Validation status
 
-Uses the mono/.NET edition of Godot (`godot-mono`, or set `GODOT_BIN` to override) plus the export templates to produce and launch a standalone Linux build:
+The GDScript files pass `gdtoolkit` syntax/style checks. This workspace does not
+have the Godot executable or Android export templates, so runtime startup,
+Android export, performance, and physical-device touch behavior remain
+unverified. The Java/OpenGL Android build is still retained separately as the
+last tested fallback; its APK has not been replaced by a Godot export.
 
-```bash
-./build-and-run.sh
-```
-
-## Controls
-
-| Input | Action |
-|-------|--------|
-| `WASD` | Move |
-| `E` / `Q` | Fly up / down (free camera) |
-| Mouse | Look around |
-| Mouse wheel | Adjust free-camera speed |
-| `Space` | Jump |
-| `Tab` | Toggle player / free camera |
-| `R` | Reload current scene |
-| `Esc` | Release mouse cursor |
-| `F11` | Toggle fullscreen |
-| `X` | Quit |
-
-## Project Structure
-
-```
-├── scripts/            # C# source
-│   ├── TerrainController.cs   # Chunk system, noise, biome logic
-│   ├── PlayerController.cs    # Character movement + camera
-│   ├── Biomes/                # Per-biome generator resources (height/detail/erosion)
-│   ├── Decorations/           # Decoration framework + placeholder meshes (trees/stones/plants/grass)
-│   ├── Grass/                 # Shader-based blade grass generator
-│   ├── Overlay/               # Debug HUD + minimap
-│   └── Water/                 # Water plane generator
-├── scenes/             # Godot scenes (main, player, camera, sky)
-├── shaders/            # GLSL shaders (terrain, grass, water)
-└── assets/Blockbench/  # Original pixel-art terrain textures + Blockbench sources
-```
-
-## Tech Stack
-
-- **Engine:** Godot 4.7 (mono)
-- **Language:** C# / .NET 8
-- **Generation:** FastNoiseLite (height, moisture, temperature, detail noise)
-- **Rendering:** Custom GLSL shaders, MultiMesh instancing, vertex-color biome selection
-
-## Last Star migration status
-
-This project is based on upstream commit `774112bc3d689c2690f8b40a3955f321dfc51542`.
-Its active main scene is now an original GDScript valley-game vertical slice
-with third-person movement, touch HUD, one basic enemy, and a finite procedural
-meadow. The original upstream C# exploration project remains in this folder
-for reference, but is not the active scene. Most Last Star systems still need
-migration, and this has not been exported or tested on Android. The existing
-native Android app remains the verified fallback. See
-[`../docs/GODOT_MIGRATION.md`](../docs/GODOT_MIGRATION.md) for scope and status.
-
-## License
-
-Distributed under the [MIT License](LICENSE). See `LICENSE` for details.
+The MIT-licensed Godot C# exploration project reviewed during migration is
+archived under `../upstream/Godot-Adventure-Game/` and is not part of this
+runtime. The active Last Star project is licensed under the repository's
+[EPL-2.0 license](../LICENSE).

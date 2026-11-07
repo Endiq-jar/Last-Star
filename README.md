@@ -1,19 +1,25 @@
 # Last Star
 
-A complete, playable Android 3D action game — **built and signed in this
-repository**, no Unity, no Gradle, no Android Studio required.
+**Engine migration in progress: Godot 4.7, GDScript.** The active project is in
+[`godot/`](godot/), with streamed terrain, streamed foliage, touch controls,
+shard collection, a basic Warden fight, and a local save. It is not yet a
+feature-complete port and has not been exported or tested on Android.
 
-[![APK](https://img.shields.io/badge/APK-last--star--1.0.0.apk-2ea44f)](apk/last-star-1.0.0.apk)
-[![minSdk](https://img.shields.io/badge/minSdk-21%20(Android%205.0)-blue)]()
-[![size](https://img.shields.io/badge/size-733%20KiB-informational)]()
-[![tests](https://img.shields.io/badge/headless%20checks-13%2C613%20passing-brightgreen)]()
+**Important:** the downloadable v1.0.0 APK below is the previous Java/OpenGL ES
+build, not the Godot project. It remains as the last verified Android fallback
+while Godot gameplay and Android export are migrated. See
+[`docs/GODOT_MIGRATION.md`](docs/GODOT_MIGRATION.md) for current status.
+
+[![Legacy APK](https://img.shields.io/badge/legacy%20APK-v1.0.0-2ea44f)](apk/last-star-1.0.0.apk)
+[![legacy APK size](https://img.shields.io/badge/legacy%20APK-756%20KiB-informational)]()
+[![native tests](https://img.shields.io/badge/native%20headless%20checks-13%2C622%20passing-brightgreen)]()
 [![licence](https://img.shields.io/badge/licence-EPL--2.0-lightgrey)](LICENSE)
 
-![Last Star gameplay](docs/screenshots/02-gameplay.png)
+![Legacy native gameplay reference](docs/screenshots/02-gameplay.png)
 
 ---
 
-## Install and play (2 minutes)
+## Last verified native Android build — v1.0.0
 
 **Download:** [**last-star-1.0.0.apk**](https://github.com/Endiq-jar/Last-Star/raw/arena/b1ab2e08-last-star/apk/last-star-1.0.0.apk)
 · in the repo: [`apk/last-star-1.0.0.apk`](apk/last-star-1.0.0.apk)
@@ -26,11 +32,14 @@ repository**, no Unity, no Gradle, no Android Studio required.
 3. Launch **Last Star**. Hold the phone in landscape.
 
 Works on **every Android device since Android 5.0 (API 21)** — 32-bit, 64-bit,
-ARM and x86. No permissions at all: no internet, no ads, no analytics, ~753 KiB.
-Signed with APK schemes v1 + v2 + v3
-(SHA-256 `16f1abd17393a169d4c0883d7085d8dce83f70b1a8204ca30c789c68dbd17607`).
+ARM and x86. No permissions at all: no internet, no ads, no analytics. This is
+the old 756 KiB APK, signed with schemes v1 + v2 + v3 (SHA-256
+`16f1abd17393a169d4c0883d7085d8dce83f70b1a8204ca30c789c68dbd17607`).
 
-### Controls
+> **The controls and feature descriptions below document the legacy native APK.**
+> They are porting targets, not claims about the current Godot project.
+
+### Legacy controls
 
 | Control | Action |
 |---|---|

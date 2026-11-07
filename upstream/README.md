@@ -1,6 +1,6 @@
 # Upstream copies
 
-This folder holds the files from the three repositories you asked me to copy.
+This folder holds the files from the four repositories reviewed for this project.
 They are **verbatim copies of the upstream projects**, kept here for reference,
 study and reuse. Each sub-folder keeps its original licence and README.
 
@@ -9,6 +9,7 @@ study and reuse. Each sub-folder keeps its original licence and README.
 | [`AnyRPGCore/`](AnyRPGCore/) | [AnyRPG/AnyRPGCore](https://github.com/AnyRPG/AnyRPGCore) | MIT | All 1,094 C# source files, shaders, Shader Graph assets, Unity `Packages/` and `ProjectSettings/` (Unity 6000.3.10f1), plus `FILE_INDEX.csv` listing **all 22,914 upstream files** with sizes |
 | [`unity-Third-person-controller-android/`](unity-Third-person-controller-android/) | [Jay22K/unity-Third-person-controller-android](https://github.com/Jay22K/unity-Third-person-controller-android) | GPL-3.0 | **Complete: 7 of 7 files** — `Third_person_controller.unitypackage` (1,245 asset entries), README, three reference images, GPL licence |
 | [`Android_Unity3D_OpenWorld/`](Android_Unity3D_OpenWorld/) | [nikunjsingh93/Android_Unity3D_OpenWorld](https://github.com/nikunjsingh93/Android_Unity3D_OpenWorld) | *(none declared upstream)* | **Complete: all 32 files** — Unity 5.6 project settings, the four `.csproj` files, `unitycar.sln`, `obj/Debug` build outputs, and the author's prebuilt `car and fps.apk` (Unity 5.6, `armeabi-v7a` + `x86`, debug-signed) |
+| [`Godot-Adventure-Game/`](Godot-Adventure-Game/) | [ProWille/Godot-Adventure-Game](https://github.com/ProWille/Godot-Adventure-Game) | MIT | Exact snapshot `774112bc3d689c2690f8b40a3955f321dfc51542`; Godot 4.7.2 Mono/C# terrain exploration project, retained for review but not active in the Last Star GDScript project |
 
 ## Why some binary files are not in this folder
 
@@ -43,6 +44,8 @@ copy. Only the binary art/audio payload is externalised.
   asking the author. The included `car and fps.apk` is the author's own build,
   signed with the standard Android debug key
   (`SHA-256 6A:01:9B:1D:...:2A:40`).
-* **Last Star** (this project's game) shares **no code, art or audio** with the
-  three repositories above. Everything in `app/`, `desktop/` and `tools/` is
-  original work, which is what keeps its EPL-2.0 licensing clean.
+* The active Last Star game shares **no code, art, or audio** with the four
+  archived projects above. The GDScript runtime in `godot/scripts/laststar/` is
+  original work; the native app, desktop harness, and build tools are also
+  original. The Godot Adventure source remains a separate MIT-licensed reference
+  copy under `upstream/Godot-Adventure-Game/`.

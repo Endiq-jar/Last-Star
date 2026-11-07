@@ -6,6 +6,7 @@ signal action_pressed(action_name: String)
 
 var overlay: Control
 var status_label: Label
+var objective_label: Label
 var vitals_label: Label
 var stick_center := Vector2.ZERO
 var stick_offset := Vector2.ZERO
@@ -38,6 +39,14 @@ func _ready() -> void:
 	status_label.add_theme_constant_override("shadow_offset_x", 2)
 	status_label.add_theme_constant_override("shadow_offset_y", 2)
 	overlay.add_child(status_label)
+	objective_label = Label.new()
+	objective_label.text = "QUEST 01  /  Find the six starlight shards"
+	objective_label.add_theme_font_size_override("font_size", 15)
+	objective_label.add_theme_color_override("font_color", Color("#f5f0ff"))
+	objective_label.add_theme_color_override("font_shadow_color", Color("#1e1e76"))
+	objective_label.add_theme_constant_override("shadow_offset_x", 2)
+	objective_label.add_theme_constant_override("shadow_offset_y", 2)
+	overlay.add_child(objective_label)
 	_create_button("RUN", "sprint", Vector2(-104, -315), true)
 	_create_button("SKILL", "skill", Vector2(-98, -220))
 	_create_button("JUMP", "jump", Vector2(-194, -126))
@@ -90,6 +99,7 @@ func _layout() -> void:
 	overlay.size = viewport_size
 	vitals_label.position = Vector2(28.0, 22.0)
 	status_label.position = Vector2(28.0, 54.0)
+	objective_label.position = Vector2(28.0, 80.0)
 	for button in buttons:
 		var offset: Vector2 = button.get_meta("offset")
 		button.position = Vector2(viewport_size.x + offset.x, viewport_size.y + offset.y)
@@ -156,6 +166,11 @@ func set_world_status(text: String) -> void:
 		status_label.text = text
 
 
-func set_vitals(health: int, energy: int) -> void:
+func set_vitals(health: int, energy: int, gold: int) -> void:
 	if is_instance_valid(vitals_label):
-		vitals_label.text = "HP %d     ENERGY %d" % [health, energy]
+		vitals_label.text = "HP %d     LIGHT %d     GOLD %d" % [health, energy, gold]
+
+
+func set_objective(text: String) -> void:
+	if is_instance_valid(objective_label):
+		objective_label.text = text

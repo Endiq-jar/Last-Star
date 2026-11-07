@@ -3,48 +3,77 @@ extends Node3D
 const HeroScript = preload("res://scripts/laststar/hero.gd")
 const WardenScript = preload("res://scripts/laststar/warden.gd")
 const TouchHudScript = preload("res://scripts/laststar/touch_hud.gd")
+const ShardScript = preload("res://scripts/laststar/shard.gd")
 
-const TERRAIN_SIZE := 180.0
-const TERRAIN_STEPS := 120
-const TREE_COUNT := 380
-const ROCK_COUNT := 110
+const TERRAIN_CHUNK_SIZE := 32.0
+const TERRAIN_CHUNK_STEPS := 20
+const TERRAIN_RENDER_DISTANCE := 3
+const TREES_PER_CHUNK := 12
+const ROCKS_PER_CHUNK := 5
 
 var height_noise := FastNoiseLite.new()
 var detail_noise := FastNoiseLite.new()
 var player: CharacterBody3D
 var enemies: Array[CharacterBody3D] = []
+var shard_areas: Array[Area3D] = []
+var shards_collected := 0
+var collected_shards := PackedByteArray([0, 0, 0, 0, 0, 0])
+var gold := 0
+var warden_defeated := false
+var warden: CharacterBody3D
 var sun: DirectionalLight3D
 var elapsed := 0.0
 var status_timer := 0.0
 var world_environment: WorldEnvironment
+var terrain_material: StandardMaterial3D
+var tree_trunk_mesh: CylinderMesh
+var tree_leaf_mesh: CylinderMesh
+var rock_mesh: SphereMesh
+var tree_trunk_material: StandardMaterial3D
+var tree_leaf_material: StandardMaterial3D
+var rock_material: StandardMaterial3D
+var terrain_chunks: Dictionary = {}
+var terrain_center := Vector2i(2147483647, 2147483647)
 var hud
 
 
 func _ready() -> void:
 	_setup_noise()
 	_build_sky_and_light()
+	_build_forest()
 	_build_terrain()
 	_build_water()
-	_build_forest()
 	_build_ridge_town()
 	_spawn_player()
+	_load_save()
+	_spawn_shards()
 	_spawn_warden()
 	_build_hud()
-	_load_save()
+	_update_objective()
 
 
 func _process(delta: float) -> void:
 	elapsed += delta
 	if is_instance_valid(sun):
+		var day_phase := fposmod(elapsed, 360.0) / 360.0
+		var night := 0.5 - 0.5 * cos(day_phase * TAU)
 		sun.rotation_degrees.y = 38.0 + sin(elapsed * 0.012) * 14.0
+		sun.rotation_degrees.x = lerpf(-48.0, 8.0, night)
+		sun.light_energy = lerpf(1.25, 0.08, night)
+		sun.light_color = Color(1.0, 0.88, 0.68).lerp(Color(0.40, 0.48, 0.78), night)
+		world_environment.environment.ambient_light_color = Color(0.72, 0.79, 0.94).lerp(
+			Color(0.17, 0.22, 0.42), night
+		)
 	if status_timer > 0.0:
 		status_timer -= delta
 	elif is_instance_valid(hud):
 		hud.set_world_status(
-			"DAY %02d   •   %.0f FPS" % [1 + int(elapsed / 180.0), Engine.get_frames_per_second()]
+			"DAY %02d   •   %.0f FPS" % [1 + int(elapsed / 360.0), Engine.get_frames_per_second()]
 		)
 	if is_instance_valid(hud) and is_instance_valid(player):
-		hud.set_vitals(player.health, player.energy)
+		hud.set_vitals(player.health, player.energy, gold)
+	if is_instance_valid(player):
+		_update_terrain_stream()
 
 
 func _setup_noise() -> void:
@@ -92,27 +121,64 @@ func _terrain_color(x: float, z: float, y: float) -> Color:
 
 
 func _build_terrain() -> void:
+	terrain_material = StandardMaterial3D.new()
+	terrain_material.vertex_color_use_as_albedo = true
+	terrain_material.roughness = 0.96
+	terrain_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_update_terrain_chunks(Vector2i.ZERO)
+
+
+func _update_terrain_stream() -> void:
+	var center := Vector2i(
+		floori(player.position.x / TERRAIN_CHUNK_SIZE),
+		floori(player.position.z / TERRAIN_CHUNK_SIZE)
+	)
+	if center != terrain_center:
+		_update_terrain_chunks(center)
+
+
+func _update_terrain_chunks(center: Vector2i) -> void:
+	terrain_center = center
+	var wanted: Dictionary = {}
+	for z in range(center.y - TERRAIN_RENDER_DISTANCE, center.y + TERRAIN_RENDER_DISTANCE + 1):
+		for x in range(center.x - TERRAIN_RENDER_DISTANCE, center.x + TERRAIN_RENDER_DISTANCE + 1):
+			var coord := Vector2i(x, z)
+			wanted[coord] = true
+			if not terrain_chunks.has(coord):
+				var chunk := _build_terrain_chunk(coord)
+				terrain_chunks[coord] = chunk
+				add_child(chunk)
+	for old_coord in terrain_chunks.keys():
+		if not wanted.has(old_coord):
+			var old_chunk: Node = terrain_chunks[old_coord]
+			old_chunk.queue_free()
+			terrain_chunks.erase(old_coord)
+
+
+func _build_terrain_chunk(coord: Vector2i) -> Node3D:
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
 	var indices := PackedInt32Array()
-	var step := TERRAIN_SIZE / float(TERRAIN_STEPS)
-	var half := TERRAIN_SIZE * 0.5
-	for z_index in range(TERRAIN_STEPS + 1):
-		var z := -half + float(z_index) * step
-		for x_index in range(TERRAIN_STEPS + 1):
-			var x := -half + float(x_index) * step
-			var y := height_at(x, z)
-			vertices.append(Vector3(x, y, z))
-			var dx := height_at(x - 0.25, z) - height_at(x + 0.25, z)
-			var dz := height_at(x, z - 0.25) - height_at(x, z + 0.25)
+	var step := TERRAIN_CHUNK_SIZE / float(TERRAIN_CHUNK_STEPS)
+	var world_origin := Vector2(coord) * TERRAIN_CHUNK_SIZE
+	for z_index in range(TERRAIN_CHUNK_STEPS + 1):
+		var local_z := float(z_index) * step
+		var world_z := world_origin.y + local_z
+		for x_index in range(TERRAIN_CHUNK_STEPS + 1):
+			var local_x := float(x_index) * step
+			var world_x := world_origin.x + local_x
+			var y := height_at(world_x, world_z)
+			vertices.append(Vector3(local_x, y, local_z))
+			var dx := height_at(world_x - 0.25, world_z) - height_at(world_x + 0.25, world_z)
+			var dz := height_at(world_x, world_z - 0.25) - height_at(world_x, world_z + 0.25)
 			normals.append(Vector3(dx, 0.5, dz).normalized())
-			colors.append(_terrain_color(x, z, y))
-	for z_index in range(TERRAIN_STEPS):
-		for x_index in range(TERRAIN_STEPS):
-			var a := z_index * (TERRAIN_STEPS + 1) + x_index
+			colors.append(_terrain_color(world_x, world_z, y))
+	for z_index in range(TERRAIN_CHUNK_STEPS):
+		for x_index in range(TERRAIN_CHUNK_STEPS):
+			var a := z_index * (TERRAIN_CHUNK_STEPS + 1) + x_index
 			var b := a + 1
-			var c := a + TERRAIN_STEPS + 1
+			var c := a + TERRAIN_CHUNK_STEPS + 1
 			var d := c + 1
 			indices.append(a)
 			indices.append(c)
@@ -126,23 +192,24 @@ func _build_terrain() -> void:
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_COLOR] = colors
 	arrays[Mesh.ARRAY_INDEX] = indices
-	var terrain_mesh := ArrayMesh.new()
-	terrain_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	var terrain_material := StandardMaterial3D.new()
-	terrain_material.vertex_color_use_as_albedo = true
-	terrain_material.roughness = 0.96
-	terrain_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	terrain_mesh.surface_set_material(0, terrain_material)
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.surface_set_material(0, terrain_material)
+	var root := Node3D.new()
+	root.name = "TerrainChunk_%d_%d" % [coord.x, coord.y]
+	root.position = Vector3(world_origin.x, 0.0, world_origin.y)
 	var ground := MeshInstance3D.new()
-	ground.name = "LushMeadow"
-	ground.mesh = terrain_mesh
-	add_child(ground)
-	var collider := StaticBody3D.new()
-	collider.name = "TerrainCollision"
-	var collision_shape := CollisionShape3D.new()
-	collision_shape.shape = terrain_mesh.create_trimesh_shape()
-	collider.add_child(collision_shape)
-	add_child(collider)
+	ground.name = "Surface"
+	ground.mesh = mesh
+	root.add_child(ground)
+	var body := StaticBody3D.new()
+	body.name = "Collision"
+	var collider := CollisionShape3D.new()
+	collider.shape = mesh.create_trimesh_shape()
+	body.add_child(collider)
+	root.add_child(body)
+	_decorate_terrain_chunk(root, coord)
+	return root
 
 
 func _build_sky_and_light() -> void:
@@ -191,83 +258,89 @@ func _build_water() -> void:
 
 
 func _build_forest() -> void:
-	var trunk := CylinderMesh.new()
-	trunk.top_radius = 0.18
-	trunk.bottom_radius = 0.32
-	trunk.height = 2.8
-	var trunk_material := StandardMaterial3D.new()
-	trunk_material.albedo_color = Color("#76513a")
-	trunk_material.roughness = 1.0
-	var leaf_mesh := CylinderMesh.new()
-	leaf_mesh.top_radius = 0.0
-	leaf_mesh.bottom_radius = 1.45
-	leaf_mesh.height = 2.5
-	var leaf_material := StandardMaterial3D.new()
-	leaf_material.albedo_color = Color("#28744b")
-	leaf_material.roughness = 0.9
-	var trunk_mm := _new_multimesh(trunk)
-	var leaf_low_mm := _new_multimesh(leaf_mesh)
-	var leaf_mid_mm := _new_multimesh(leaf_mesh)
-	var leaf_top_mm := _new_multimesh(leaf_mesh)
-	var trunk_transforms: Array[Transform3D] = []
-	var leaf_low_transforms: Array[Transform3D] = []
-	var leaf_mid_transforms: Array[Transform3D] = []
-	var leaf_top_transforms: Array[Transform3D] = []
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 271828
-	var placed := 0
-	while placed < TREE_COUNT:
-		var x := rng.randf_range(-84.0, 84.0)
-		var z := rng.randf_range(-84.0, 84.0)
-		if absf(z - path_center(x)) < 6.0 or Vector2(x, z).length() < 12.0:
-			continue
-		if absf(x) < 19.0 and z > -35.0:
-			continue
-		var y := height_at(x, z)
-		if y > 8.0:
-			continue
-		var scale := rng.randf_range(0.72, 1.45)
-		var yaw := rng.randf_range(0.0, TAU)
-		var origin := Vector3(x, y, z)
-		var basis := Basis(Vector3.UP, yaw).scaled(Vector3.ONE * scale)
-		trunk_transforms.append(Transform3D(basis, origin + Vector3.UP * 1.4 * scale))
-		leaf_low_transforms.append(Transform3D(basis, origin + Vector3.UP * 2.4 * scale))
-		leaf_mid_transforms.append(Transform3D(basis, origin + Vector3.UP * 3.4 * scale))
-		leaf_top_transforms.append(Transform3D(basis, origin + Vector3.UP * 4.3 * scale))
-		placed += 1
-	_fill_multimesh(trunk_mm, trunk_transforms)
-	_fill_multimesh(leaf_low_mm, leaf_low_transforms)
-	_fill_multimesh(leaf_mid_mm, leaf_mid_transforms)
-	_fill_multimesh(leaf_top_mm, leaf_top_transforms)
-	_add_multimesh("TreeTrunks", trunk_mm, trunk_material)
-	_add_multimesh("CanopyLower", leaf_low_mm, leaf_material)
-	_add_multimesh("CanopyMiddle", leaf_mid_mm, leaf_material)
-	_add_multimesh("CanopyUpper", leaf_top_mm, leaf_material)
-	var rock_mesh := SphereMesh.new()
+	tree_trunk_mesh = CylinderMesh.new()
+	tree_trunk_mesh.top_radius = 0.18
+	tree_trunk_mesh.bottom_radius = 0.32
+	tree_trunk_mesh.height = 2.8
+	tree_trunk_material = StandardMaterial3D.new()
+	tree_trunk_material.albedo_color = Color("#76513a")
+	tree_trunk_material.roughness = 1.0
+	tree_leaf_mesh = CylinderMesh.new()
+	tree_leaf_mesh.top_radius = 0.0
+	tree_leaf_mesh.bottom_radius = 1.45
+	tree_leaf_mesh.height = 2.5
+	tree_leaf_material = StandardMaterial3D.new()
+	tree_leaf_material.albedo_color = Color("#28744b")
+	tree_leaf_material.roughness = 0.9
+	rock_mesh = SphereMesh.new()
 	rock_mesh.radius = 0.8
 	rock_mesh.height = 1.15
-	var rock_material := StandardMaterial3D.new()
+	rock_material = StandardMaterial3D.new()
 	rock_material.albedo_color = Color("#71808b")
 	rock_material.roughness = 0.95
+
+
+func _decorate_terrain_chunk(root: Node3D, coord: Vector2i) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int((coord.x * 73856093) ^ (coord.y * 19349663) ^ 271828)
+	var trunk_mm := _new_multimesh(tree_trunk_mesh)
+	var lower_mm := _new_multimesh(tree_leaf_mesh)
+	var middle_mm := _new_multimesh(tree_leaf_mesh)
+	var upper_mm := _new_multimesh(tree_leaf_mesh)
+	var trunk_transforms: Array[Transform3D] = []
+	var lower_transforms: Array[Transform3D] = []
+	var middle_transforms: Array[Transform3D] = []
+	var upper_transforms: Array[Transform3D] = []
+	var tree_attempts := 0
+	while trunk_transforms.size() < TREES_PER_CHUNK and tree_attempts < TREES_PER_CHUNK * 8:
+		tree_attempts += 1
+		var local_x := rng.randf_range(1.0, TERRAIN_CHUNK_SIZE - 1.0)
+		var local_z := rng.randf_range(1.0, TERRAIN_CHUNK_SIZE - 1.0)
+		var world_x := coord.x * TERRAIN_CHUNK_SIZE + local_x
+		var world_z := coord.y * TERRAIN_CHUNK_SIZE + local_z
+		if absf(world_z - path_center(world_x)) < 5.5:
+			continue
+		if Vector2(world_x, world_z).length() < 13.0:
+			continue
+		if absf(world_x) < 34.0 and world_z < -54.0:
+			continue
+		var ground_y := height_at(world_x, world_z)
+		if ground_y > 8.0:
+			continue
+		var scale := rng.randf_range(0.72, 1.42)
+		var basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale)
+		var origin := Vector3(local_x, ground_y, local_z)
+		trunk_transforms.append(Transform3D(basis, origin + Vector3.UP * 1.4 * scale))
+		lower_transforms.append(Transform3D(basis, origin + Vector3.UP * 2.4 * scale))
+		middle_transforms.append(Transform3D(basis, origin + Vector3.UP * 3.4 * scale))
+		upper_transforms.append(Transform3D(basis, origin + Vector3.UP * 4.3 * scale))
+	_fill_multimesh(trunk_mm, trunk_transforms)
+	_fill_multimesh(lower_mm, lower_transforms)
+	_fill_multimesh(middle_mm, middle_transforms)
+	_fill_multimesh(upper_mm, upper_transforms)
+	_add_multimesh(root, "TreeTrunks", trunk_mm, tree_trunk_material)
+	_add_multimesh(root, "CanopyLower", lower_mm, tree_leaf_material)
+	_add_multimesh(root, "CanopyMiddle", middle_mm, tree_leaf_material)
+	_add_multimesh(root, "CanopyUpper", upper_mm, tree_leaf_material)
 	var rock_mm := _new_multimesh(rock_mesh)
 	var rock_transforms: Array[Transform3D] = []
-	for i in range(ROCK_COUNT):
-		var x := rng.randf_range(-80.0, 80.0)
-		var z := rng.randf_range(-80.0, 80.0)
-		if absf(z - path_center(x)) < 4.0:
+	for i in range(ROCKS_PER_CHUNK):
+		var local_x := rng.randf_range(1.0, TERRAIN_CHUNK_SIZE - 1.0)
+		var local_z := rng.randf_range(1.0, TERRAIN_CHUNK_SIZE - 1.0)
+		var world_x := coord.x * TERRAIN_CHUNK_SIZE + local_x
+		var world_z := coord.y * TERRAIN_CHUNK_SIZE + local_z
+		if absf(world_z - path_center(world_x)) < 3.5:
 			continue
-		var scale := rng.randf_range(0.35, 1.2)
-		var point := Vector3(x, height_at(x, z) + 0.1, z)
+		if absf(world_x + 38.0 + (world_z + 26.0) * 0.12) < 4.0:
+			continue
+		var scale := rng.randf_range(0.35, 1.15)
+		var point := Vector3(local_x, height_at(world_x, world_z) + 0.1, local_z)
+		var rotation := Basis(Vector3.UP, rng.randf_range(0.0, TAU))
 		rock_transforms.append(
-			Transform3D(
-				Basis(Vector3.UP, rng.randf_range(0.0, TAU)).scaled(
-					Vector3(scale, scale * 0.65, scale)
-				),
-				point
-			)
+			Transform3D(rotation.scaled(Vector3(scale, scale * 0.65, scale)), point)
 		)
 	_fill_multimesh(rock_mm, rock_transforms)
-	_add_multimesh("MeadowRocks", rock_mm, rock_material)
+	_add_multimesh(root, "MeadowRocks", rock_mm, rock_material)
 
 
 func _new_multimesh(mesh: Mesh) -> MultiMesh:
@@ -284,12 +357,12 @@ func _fill_multimesh(multimesh: MultiMesh, transforms: Array[Transform3D]) -> vo
 		multimesh.set_instance_transform(i, transforms[i])
 
 
-func _add_multimesh(node_name: String, data: MultiMesh, material: Material) -> void:
+func _add_multimesh(parent: Node3D, node_name: String, data: MultiMesh, material: Material) -> void:
 	var mesh_instance := MultiMeshInstance3D.new()
 	mesh_instance.name = node_name
 	mesh_instance.multimesh = data
 	mesh_instance.material_override = material
-	add_child(mesh_instance)
+	parent.add_child(mesh_instance)
 
 
 func _build_ridge_town() -> void:
@@ -396,13 +469,93 @@ func _spawn_player() -> void:
 	player.set("world_root", self)
 
 
+func _spawn_shards() -> void:
+	var positions := [
+		Vector2(-19.0, -15.0),
+		Vector2(18.0, -11.0),
+		Vector2(-34.0, -39.0),
+		Vector2(31.0, -42.0),
+		Vector2(3.0, -59.0),
+		Vector2(-52.0, 12.0)
+	]
+	var crystal_mesh := SphereMesh.new()
+	crystal_mesh.radius = 0.34
+	crystal_mesh.height = 0.9
+	var crystal_material := StandardMaterial3D.new()
+	crystal_material.albedo_color = Color("#f7b769")
+	crystal_material.emission_enabled = true
+	crystal_material.emission = Color("#dc9846")
+	crystal_material.roughness = 0.25
+	for i in range(positions.size()):
+		if collected_shards[i] != 0:
+			continue
+		var point: Vector2 = positions[i]
+		var area := Area3D.new()
+		area.name = "StarlightShard_%d" % i
+		area.set_script(ShardScript)
+		area.set("shard_index", i)
+		area.set("float_phase", float(i) * 0.9)
+		area.set("base_y", height_at(point.x, point.y) + 1.2)
+		area.position = Vector3(point.x, height_at(point.x, point.y) + 1.2, point.y)
+		var trigger := CollisionShape3D.new()
+		var radius := SphereShape3D.new()
+		radius.radius = 1.45
+		trigger.shape = radius
+		area.add_child(trigger)
+		var visual := MeshInstance3D.new()
+		visual.mesh = crystal_mesh
+		visual.material_override = crystal_material
+		area.add_child(visual)
+		area.body_entered.connect(_on_shard_body_entered.bind(area, i))
+		add_child(area)
+		shard_areas.append(area)
+
+
+func _on_shard_body_entered(body: Node3D, area: Area3D, shard_index: int) -> void:
+	if body != player or not is_instance_valid(area):
+		return
+	if (
+		shard_index < 0
+		or shard_index >= collected_shards.size()
+		or collected_shards[shard_index] != 0
+	):
+		return
+	collected_shards[shard_index] = 1
+	area.set_deferred("monitoring", false)
+	area.queue_free()
+	shard_areas.erase(area)
+	shards_collected = mini(6, shards_collected + 1)
+	gold += 25
+	player.energy = mini(100, player.energy + 20)
+	_set_status("STAR SHARD FOUND  •  +25 GOLD")
+	if shards_collected >= 6 and is_instance_valid(warden):
+		warden.call("set_active", true)
+		_set_status("THE WARDEN AWAKENS")
+	_update_objective()
+
+
+func _update_objective() -> void:
+	if not is_instance_valid(hud):
+		return
+	if shards_collected < 6:
+		hud.set_objective("QUEST 01  /  Find the six starlight shards  •  %d/6" % shards_collected)
+	elif not warden_defeated:
+		hud.set_objective("QUEST 02  /  Defeat the awakened Warden")
+	else:
+		hud.set_objective("VALLEY RESTORED  /  Explore the ridge town")
+
+
 func _spawn_warden() -> void:
+	if warden_defeated:
+		return
 	var enemy := CharacterBody3D.new()
 	enemy.name = "Warden"
 	enemy.set_script(WardenScript)
 	enemy.position = Vector3(7.0, height_at(7.0, -18.0) + 1.0, -18.0)
 	add_child(enemy)
 	enemy.set("target", player)
+	enemy.call("set_active", shards_collected >= 6)
+	warden = enemy
 	enemies.append(enemy)
 
 
@@ -430,6 +583,9 @@ func _on_action(action_name: String) -> void:
 
 
 func damage_nearest_enemy(amount: int, radius: float) -> void:
+	if shards_collected < 6:
+		_set_status("FIND ALL SIX SHARDS FIRST")
+		return
 	for enemy in enemies:
 		if (
 			is_instance_valid(enemy)
@@ -439,7 +595,10 @@ func damage_nearest_enemy(amount: int, radius: float) -> void:
 			if int(enemy.get("health")) <= 0:
 				enemies.erase(enemy)
 				enemy.queue_free()
-				_set_status("WARDEN DEFEATED")
+				warden_defeated = true
+				gold += 100
+				_set_status("WARDEN DEFEATED  •  +100 GOLD")
+				_update_objective()
 			return
 	_set_status("NO TARGET IN RANGE")
 
@@ -451,16 +610,87 @@ func _set_status(text: String) -> void:
 
 
 func _load_save() -> void:
-	var data := ConfigFile.new()
-	if data.load("user://last_star_godot.cfg") == OK:
-		var saved: Vector3 = data.get_value("player", "position", player.position)
-		if saved.length() < TERRAIN_SIZE * 0.6:
-			player.position = Vector3(saved.x, height_at(saved.x, saved.z) + 1.2, saved.z)
+	var path := "user://last_star_godot.json"
+	if not FileAccess.file_exists(path):
+		return
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return
+	var decoded: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if not decoded is Dictionary:
+		return
+	var payload: Dictionary = decoded.duplicate(true)
+	var checksum := str(payload.get("checksum", ""))
+	payload.erase("checksum")
+	if int(payload.get("schema", 0)) != 1 or checksum != _sha256(JSON.stringify(payload, "", true)):
+		return
+	var world_data: Dictionary = payload.get("world", {})
+	var player_data: Dictionary = payload.get("player", {})
+	var progress: Dictionary = payload.get("progress", {})
+	elapsed = clampf(float(world_data.get("time", 0.0)), 0.0, 100000000.0)
+	var saved_position: Variant = player_data.get("position", [])
+	if saved_position is Array and saved_position.size() == 3:
+		var saved_x := float(saved_position[0])
+		var saved_z := float(saved_position[2])
+		if maxf(absf(saved_x), absf(saved_z)) < 100000.0:
+			player.position = Vector3(saved_x, height_at(saved_x, saved_z) + 1.2, saved_z)
+			_update_terrain_chunks(
+				Vector2i(floori(saved_x / TERRAIN_CHUNK_SIZE), floori(saved_z / TERRAIN_CHUNK_SIZE))
+			)
+	player.health = clampi(int(player_data.get("health", 100)), 1, 100)
+	player.energy = clampi(int(player_data.get("energy", 100)), 0, 100)
+	gold = clampi(int(progress.get("gold", 0)), 0, 1000000)
+	warden_defeated = bool(progress.get("warden_defeated", false))
+	var shard_data: Variant = progress.get("collected_shards", [])
+	if shard_data is Array and shard_data.size() == collected_shards.size():
+		shards_collected = 0
+		for i in range(collected_shards.size()):
+			collected_shards[i] = 1 if bool(shard_data[i]) else 0
+			shards_collected += collected_shards[i]
+
+
+func _save_game() -> void:
+	if not is_instance_valid(player):
+		return
+	var saved_shards: Array[bool] = []
+	for value in collected_shards:
+		saved_shards.append(value != 0)
+	var payload := {
+		"schema": 1,
+		"world": {"time": elapsed},
+		"player":
+		{
+			"position": [player.position.x, player.position.y, player.position.z],
+			"health": player.health,
+			"energy": player.energy
+		},
+		"progress":
+		{"gold": gold, "collected_shards": saved_shards, "warden_defeated": warden_defeated}
+	}
+	var canonical := JSON.stringify(payload, "", true)
+	payload["checksum"] = _sha256(canonical)
+	var temporary := "user://last_star_godot.json.tmp"
+	var output := FileAccess.open(temporary, FileAccess.WRITE)
+	if output == null:
+		return
+	output.store_string(JSON.stringify(payload, "", true))
+	output.flush()
+	output.close()
+	var source_path := ProjectSettings.globalize_path(temporary)
+	var target_path := ProjectSettings.globalize_path("user://last_star_godot.json")
+	if DirAccess.rename_absolute(source_path, target_path) != OK:
+		DirAccess.remove_absolute(source_path)
+
+
+func _sha256(text: String) -> String:
+	var context := HashingContext.new()
+	if context.start(HashingContext.HASH_SHA256) != OK:
+		return ""
+	context.update(text.to_utf8_buffer())
+	return context.finish().hex_encode()
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_PREDELETE:
-		if is_instance_valid(player):
-			var data := ConfigFile.new()
-			data.set_value("player", "position", Vector3(player.position.x, 0.0, player.position.z))
-			data.save("user://last_star_godot.cfg")
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
+		_save_game()

@@ -4,6 +4,7 @@ extends CharacterBody3D
 @export var health := 6
 @export var speed := 2.0
 
+var active := false
 var gravity := 20.0
 var think_timer := 0.0
 var body_mesh: MeshInstance3D
@@ -45,6 +46,9 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if not active:
+		velocity = Vector3.ZERO
+		return
 	think_timer -= delta
 	if is_instance_valid(target) and think_timer <= 0.0:
 		think_timer = 0.12
@@ -62,6 +66,13 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y = 0.0
 	move_and_slide()
+
+
+func set_active(enabled: bool) -> void:
+	active = enabled
+	if is_instance_valid(body_mesh):
+		var material := body_mesh.material_override as StandardMaterial3D
+		material.emission = Color("#7b356f") if enabled else Color("#38265e")
 
 
 func take_damage(amount: int) -> void:
