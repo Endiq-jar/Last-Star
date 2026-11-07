@@ -328,12 +328,40 @@ def _walk(nodes, out):
             _walk(n.children, out)
 
 
+def _connections(roots):
+    """
+    Reads the Connections table: (childId, parentId) pairs.
+
+    <p>Two exporter styles tie a Model to its Geometry, and real packs mix
+    them:</p>
+    <ul>
+      <li>a {@code Geometry} node nested inside the {@code Model};</li>
+      <li>a {@code C: "OO", geometryId, modelId} entry under
+          {@code Connections}.</li>
+    </ul>
+    <p>The Connections table sits at the document root, not inside
+    {@code Objects}, so a walker that only descends into Objects never sees it
+    -- which is exactly how the spell-book mesh silently came back empty.</p>
+    """
+    pairs = []
+    for root in roots:
+        conn = root if root.name == 'Connections' else root.find('Connections')
+        if conn is None:
+            continue
+        for c in conn.children:
+            if c.name != 'C' or len(c.props) < 3:
+                continue
+            if c.props[0] == 'OO':
+                pairs.append((c.props[1], c.props[2]))
+    return pairs
+
+
 def read_fbx(path):
     """
     Returns (positions, normals) as flat float lists for the whole file.
 
-    Every mesh in the file is merged. A "Mountain" pack usually ships as one
-    mountain per FBX, so merging is the right default; separate files stay
+    Every mesh in the file is merged. An environment pack usually ships one
+    asset per FBX, so merging is the right default; separate files stay
     separate because the bake takes one model per file.
     """
     with open(path, 'rb') as f:
@@ -346,20 +374,23 @@ def read_fbx(path):
     objects = []
     _walk(roots, objects)
 
-    # Map geometry id -> transform, so instances placed with Lcl Translation
-    # land in the right spot instead of all stacking at the origin.
-    model_by_geom = {}
-    transforms = {}
+    # Map geometry id -> owning model, covering both linking styles.
+    parent_of = {}
+    for child, parent in _connections(roots):
+        parent_of[child] = parent
     for n in objects:
         if n.name == 'Model':
             uid = n.get(0)
-            t = _matrix_from(n)
-            transforms[uid] = t
             for c in n.children:
                 if c.name == 'Geometry':
                     gid = c.get(0)
                     if gid is not None:
-                        model_by_geom[gid] = uid
+                        parent_of[gid] = uid
+
+    by_id = {}
+    for n in objects:
+        if n.name == 'Model':
+            by_id[n.get(0)] = n
 
     all_pos = []
     all_nrm = []
@@ -367,7 +398,8 @@ def read_fbx(path):
         if n.name != 'Geometry':
             continue
         gid = n.get(0)
-        transform = transforms.get(model_by_geom.get(gid))
+        owner = by_id.get(parent_of.get(gid))
+        transform = _matrix_from(owner) if owner is not None else None
         got = _geometry_from(n, transform)
         if got is None:
             continue
@@ -376,8 +408,6 @@ def read_fbx(path):
 
     if not all_pos:
         raise FbxError('no triangle geometry found in %s' % path)
-    # Flatten: the bake pipeline wants one float list for positions and one for
-    # normals, not a list of triples.
     out_p = []
     out_n = []
     for p in all_pos:
