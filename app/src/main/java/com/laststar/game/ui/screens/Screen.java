@@ -15,6 +15,8 @@ public interface Screen {
         SWITCH_TAB,
         /** Asks the menu to open the spell book. */
         OPEN_SPELLS,
+        /** Asks the menu to open the forge. */
+        OPEN_FORGE,
         BACK
     }
 

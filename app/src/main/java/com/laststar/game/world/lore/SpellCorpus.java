@@ -107,6 +107,19 @@ public final class SpellCorpus {
     }
 
     /** One spell. */
+    /**
+     * Builds a spell that was made rather than authored.
+     *
+     * <p>Public because spell creation is a supported way to gain a page: the
+     * result has to be indistinguishable from a found one.</p>
+     */
+    public static Def make(String name, Category category, Shape shape,
+                           float lightCost, float baseDamage, float cooldown,
+                           float range, int foundIn, Stage[] stages) {
+        return new Def(name, category, shape, lightCost, baseDamage, cooldown,
+                range, foundIn, stages);
+    }
+
     public static final class Def {
         public final String name;
         public final Category category;

@@ -37,6 +37,7 @@ public final class MenuPreview {
         shoot(outDir, w, h, "quests-side", Menu.Page.QUESTS, "side");
         shoot(outDir, w, h, "spells", Menu.Page.SPELLS, null);
         shoot(outDir, w, h, "spells-all", Menu.Page.SPELLS, "all");
+        shoot(outDir, w, h, "forge", Menu.Page.FORGE, null);
         shoot(outDir, w, h, "font-sheet", Menu.Page.HOME, "font");
 
         System.out.println("menu previews written to " + outDir);

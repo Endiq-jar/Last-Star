@@ -92,7 +92,13 @@ public final class SpellBook {
     }
 
     /** One page per spell in the corpus, indexed the same way. */
-    public final Page[] pages = new Page[SpellCorpus.count()];
+    /**
+     * Every page the player owns.
+     *
+     * <p>Grows: a spell made at the forge joins the book alongside the authored
+     * ones, so this cannot be a fixed array sized to the corpus.</p>
+     */
+    public Page[] pages = new Page[SpellCorpus.count()];
 
     /** Current Light. */
     public float light = BASE_LIGHT;
@@ -120,6 +126,46 @@ public final class SpellBook {
         while (slot < equipped.length) {
             equipped[slot++] = -1;
         }
+    }
+
+    /**
+     * Adds a made spell to the book, awake and ready to cast.
+     *
+     * <p>Refuses a duplicate: a spell the player already owns does not gain a
+     * second page because they forged it again. A new page goes on the bar if
+     * there is room, so a player who just made a spell can use it immediately.</p>
+     *
+     * @return the index of the new page, or -1 if it was refused
+     */
+    public int addForgedPage(SpellCorpus.Def def) {
+        if (def == null) {
+            return -1;
+        }
+        for (int i = 0; i < pages.length; i++) {
+            if (com.laststar.game.world.lore.SpellForge.same(pages[i].def, def)) {
+                return -1;
+            }
+        }
+        Page[] next = new Page[pages.length + 1];
+        System.arraycopy(pages, 0, next, 0, pages.length);
+        next[pages.length] = new Page(def, true);
+        pages = next;
+        int free = -1;
+        for (int i = 0; i < equipped.length; i++) {
+            if (equipped[i] < 0) {
+                free = i;
+                break;
+            }
+        }
+        if (free >= 0) {
+            equipped[free] = pages.length - 1;
+        }
+        // A full bar means the newest page displaces the oldest slot rather
+        // than being unreachable: the player just chose to make it.
+        else {
+            equipped[equipped.length - 1] = pages.length - 1;
+        }
+        return pages.length - 1;
     }
 
     /** Advances regeneration, cooldowns and passive mastery. */

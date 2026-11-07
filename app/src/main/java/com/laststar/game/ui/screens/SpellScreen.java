@@ -467,6 +467,11 @@ public final class SpellScreen implements Screen {
     @Override
     public void drawTitle(UiBatch b, AtlasFont font, float alpha) {
         GenshinKit.title(b, "THE WANDER", b.virtualWidth * 0.5f, 8f, font, alpha);
+        // A hint that the chevron leads somewhere useful, since it is not a
+        // plain back arrow any more.
+        b.textSpaced("FORGE", 54f, 22f, 1, 0.4f,
+                Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1], Style.GOLD_LIGHT[2],
+                0.85f * alpha, font);
     }
 
     @Override
@@ -514,7 +519,9 @@ public final class SpellScreen implements Screen {
             return Action.NONE;
         }
         if (Math.abs(x - 30f) < 20f && Math.abs(y - 26f) < 20f) {
-            return Action.BACK;
+            // The back chevron goes to the forge instead of out: making a page
+            // is the thing a player wants next after reading the book.
+            return Action.OPEN_FORGE;
         }
         if (Math.abs(x - (w - 30f)) < 20f && Math.abs(y - 26f) < 20f) {
             return Action.BACK;

@@ -9,6 +9,7 @@ import com.laststar.game.world.World;
 import com.laststar.game.world.lore.Elaris;
 import com.laststar.game.world.lore.QuestCorpus;
 import com.laststar.game.world.lore.SpellCorpus;
+import com.laststar.game.world.lore.SpellForge;
 
 import java.io.IOException;
 import java.util.List;
@@ -43,6 +44,7 @@ public final class SystemsTest {
         regionTravel();
         combatKit();
         bosses();
+        spellForge();
 
         System.out.println(checks + " checks, " + failures + " failures");
         if (failures > 0) {
@@ -397,6 +399,121 @@ public final class SystemsTest {
             }
         }
         return true;
+    }
+
+    // -- spell creation -------------------------------------------------------
+
+    private static void spellForge() {
+        System.out.println("SpellForge");
+
+        // The same element and shape with different behaviours are different
+        // spells, which is the whole point of the dials.
+        SpellForge.Recipe a = new SpellForge.Recipe(SpellForge.Element.GALE,
+                SpellCorpus.Shape.BOLT, SpellForge.Behaviour.NONE);
+        SpellForge.Recipe b = new SpellForge.Recipe(SpellForge.Element.GALE,
+                SpellCorpus.Shape.BOLT, SpellForge.Behaviour.CHAIN);
+        check("behaviour changes the name", !a.name().equals(b.name()));
+        check("the name names the element", a.name().startsWith("GALE"));
+
+        // Element and shape both show in the result.
+        SpellForge.Recipe c = new SpellForge.Recipe(SpellForge.Element.FROST,
+                SpellCorpus.Shape.FIELD, SpellForge.Behaviour.SLOW);
+        check("a field of frost reads as one", c.name().startsWith("FROST"));
+
+        // The dials actually do something, and they interact with the cost.
+        SpellForge.Recipe cheap = new SpellForge.Recipe(SpellForge.Element.EMBER,
+                SpellCorpus.Shape.BOLT, SpellForge.Behaviour.NONE);
+        cheap.power = 0.1f;
+        cheap.area = 0.1f;
+        cheap.range = 0.1f;
+        SpellForge.Recipe dear = new SpellForge.Recipe(SpellForge.Element.EMBER,
+                SpellCorpus.Shape.BOLT, SpellForge.Behaviour.NONE);
+        dear.power = 0.95f;
+        dear.area = 0.9f;
+        dear.range = 0.9f;
+        check("power costs Light",
+                SpellForge.lightCost(dear) > SpellForge.lightCost(cheap) * 2f);
+        check("power buys damage",
+                SpellForge.baseDamage(dear) > SpellForge.baseDamage(cheap) * 2f);
+        check("power costs time",
+                SpellForge.cooldown(dear) > SpellForge.cooldown(cheap));
+        check("range is a distance",
+                SpellForge.range(dear) > SpellForge.range(cheap));
+
+        // A behaviour is ambition, and ambition is budgeted in Light.
+        SpellForge.Recipe plain = new SpellForge.Recipe(SpellForge.Element.STORM,
+                SpellCorpus.Shape.BEAM, SpellForge.Behaviour.NONE);
+        SpellForge.Recipe fancy = new SpellForge.Recipe(SpellForge.Element.STORM,
+                SpellCorpus.Shape.BEAM, SpellForge.Behaviour.HEAL);
+        check("a behaviour costs Light",
+                SpellForge.lightCost(fancy) > SpellForge.lightCost(plain));
+
+        // A forged spell is a real spell: it has stages, and reaches thirty.
+        SpellCorpus.Def made = SpellForge.forge(dear);
+        check("a forged spell has a name", made.name.length() > 4);
+        check("a forged spell has a curve", made.stages.length >= 3);
+        check("a forged spell can reach mastery",
+                made.stageAt(30).damageScale > made.stageAt(1).damageScale);
+        // The behaviour is the thing the player chose, so it is there on the
+        // first cast rather than withheld until mastery ten.
+        check("a forged spell carries its behaviour from the start",
+                made.has(dear.behaviour.trait, 1)
+                        && made.has(dear.behaviour.trait, 30));
+
+        // It joins the book, on the bar, and the book grows.
+        SpellBook book = new SpellBook();
+        int before = book.pages.length;
+        int index = book.addForgedPage(made);
+        check("a forged spell joins the book", index >= before);
+        check("the book grew", book.pages.length == before + 1);
+        check("the new page is awake", book.pages[index].awake);
+        boolean onBar = false;
+        for (int i = 0; i < book.equipped.length; i++) {
+            onBar |= book.equipped[i] == index;
+        }
+        check("the new page is usable at once", onBar);
+
+        // Forging the same thing twice must not fill the book with copies.
+        check("a duplicate is refused", book.addForgedPage(SpellForge.forge(dear)) < 0);
+        check("the book did not grow again", book.pages.length == before + 1);
+
+        // A duplicate is refused on the shape and cost, not only the name.
+        SpellCorpus.Def renamed = SpellCorpus.make(made.name, made.category,
+                made.shape, made.lightCost, made.baseDamage + 5f, made.cooldown,
+                made.range, -1, made.stages);
+        check("same name and shape is the same spell",
+                SpellForge.same(made, renamed));
+
+        // Every element and shape combination has a name rather than null.
+        boolean everyComboNamed = true;
+        for (int e = 0; e < SpellForge.Element.values().length; e++) {
+            for (int sh = 0; sh < 9; sh++) {
+                SpellForge.Recipe r = new SpellForge.Recipe(
+                        SpellForge.Element.values()[e], SpellCorpus.Shape.values()[sh],
+                        SpellForge.Behaviour.NONE);
+                if (r.name() == null || r.name().length() < 5) {
+                    everyComboNamed = false;
+                }
+            }
+        }
+        check("every combination has a name", everyComboNamed);
+
+        // Two different recipes are never the same spell.
+        boolean distinct = true;
+        for (int e = 0; e < SpellForge.Element.values().length; e++) {
+            for (int sh = 0; sh < 9; sh++) {
+                SpellForge.Recipe r1 = new SpellForge.Recipe(
+                        SpellForge.Element.values()[e], SpellCorpus.Shape.values()[sh],
+                        SpellForge.Behaviour.NONE);
+                SpellForge.Recipe r2 = new SpellForge.Recipe(
+                        SpellForge.Element.values()[e], SpellCorpus.Shape.values()[sh],
+                        SpellForge.Behaviour.EXPLODE);
+                if (SpellForge.same(SpellForge.forge(r1), SpellForge.forge(r2))) {
+                    distinct = false;
+                }
+            }
+        }
+        check("different behaviours make different spells", distinct);
     }
 
     // -- the bosses -----------------------------------------------------------
