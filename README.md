@@ -2,7 +2,7 @@
 
 **Last Star is a Godot 4.7 GDScript game.** The project now lives at the repository root: open this folder directly in Godot, where `project.godot` is located. There is no extra project subfolder to enter.
 
-The game is an original offline fantasy adventure with streamed procedural terrain, a winding trail and river, meadow vegetation, a ridge settlement, touch controls, shard collection, a Warden encounter, day/night lighting, and a local save. It uses no network services, ads, or analytics.
+The game is an original offline fantasy adventure with streamed Terrain3D ground, an alpine gravel trail and timber lodge, distant faceted mountain ridges, textured conifer and broadleaf tree assets, meadow vegetation, touch controls, shard collection, a Warden encounter, day/night lighting, and a local save. It uses no network services, ads, or analytics.
 
 ## Open and run
 

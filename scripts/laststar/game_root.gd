@@ -4,6 +4,7 @@ const HeroScript = preload("res://scripts/laststar/hero.gd")
 const WardenScript = preload("res://scripts/laststar/warden.gd")
 const TouchHudScript = preload("res://scripts/laststar/touch_hud.gd")
 const ShardScript = preload("res://scripts/laststar/shard.gd")
+const AlpineEnvironment = preload("res://scripts/laststar/alpine_environment.gd")
 
 const TERRAIN_CHUNK_SIZE := 32.0
 const TERRAIN_CHUNK_STEPS := 20
@@ -34,12 +35,14 @@ var terrain_material: StandardMaterial3D
 var terrain3d: Node3D
 var tree_trunk_mesh: CylinderMesh
 var tree_leaf_mesh: CylinderMesh
+var tree_broadleaf_mesh: SphereMesh
 var rock_mesh: SphereMesh
 var grass_blade_mesh: CylinderMesh
 var flower_stem_mesh: CylinderMesh
 var flower_head_mesh: SphereMesh
 var tree_trunk_material: StandardMaterial3D
 var tree_leaf_material: StandardMaterial3D
+var tree_broadleaf_material: StandardMaterial3D
 var rock_material: StandardMaterial3D
 var grass_material: StandardMaterial3D
 var flower_stem_material: StandardMaterial3D
@@ -336,6 +339,15 @@ func _build_forest() -> void:
 		tree_trunk_material = trunk_source.get_active_material(0) as StandardMaterial3D
 		tree_leaf_material = canopy_source.get_active_material(0) as StandardMaterial3D
 		tree_source.free()
+		var broadleaf_scene := (
+			load("res://assets/terrain3d/foliage/broadleaf_tree.tscn") as PackedScene
+		)
+		if broadleaf_scene != null:
+			var broadleaf_source := broadleaf_scene.instantiate()
+			var broadleaf_canopy := broadleaf_source.get_node("Canopy") as MeshInstance3D
+			tree_broadleaf_mesh = broadleaf_canopy.mesh as SphereMesh
+			tree_broadleaf_material = broadleaf_canopy.get_active_material(0) as StandardMaterial3D
+			broadleaf_source.free()
 	else:
 		push_error("Terrain3D pine tree asset could not be loaded.")
 		return
@@ -377,10 +389,12 @@ func _decorate_terrain_chunk(root: Node3D, coord: Vector2i) -> void:
 	var lower_mm := _new_multimesh(tree_leaf_mesh)
 	var middle_mm := _new_multimesh(tree_leaf_mesh)
 	var upper_mm := _new_multimesh(tree_leaf_mesh)
+	var broadleaf_mm := _new_multimesh(tree_broadleaf_mesh)
 	var trunk_transforms: Array[Transform3D] = []
 	var lower_transforms: Array[Transform3D] = []
 	var middle_transforms: Array[Transform3D] = []
 	var upper_transforms: Array[Transform3D] = []
+	var broadleaf_transforms: Array[Transform3D] = []
 	var tree_attempts := 0
 	while trunk_transforms.size() < TREES_PER_CHUNK and tree_attempts < TREES_PER_CHUNK * 8:
 		tree_attempts += 1
@@ -401,17 +415,27 @@ func _decorate_terrain_chunk(root: Node3D, coord: Vector2i) -> void:
 		var basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale)
 		var origin := Vector3(local_x, ground_y, local_z)
 		trunk_transforms.append(Transform3D(basis, origin + Vector3.UP * 1.3 * scale))
-		lower_transforms.append(Transform3D(basis, origin + Vector3.UP * 2.2 * scale))
-		middle_transforms.append(Transform3D(basis, origin + Vector3.UP * 2.95 * scale))
-		upper_transforms.append(Transform3D(basis, origin + Vector3.UP * 3.7 * scale))
+		if rng.randf() < 0.34 and tree_broadleaf_mesh != null:
+			var canopy_basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU)).scaled(
+				Vector3(1.0, 0.82, 1.0) * scale
+			)
+			broadleaf_transforms.append(
+				Transform3D(canopy_basis, origin + Vector3.UP * 3.0 * scale)
+			)
+		else:
+			lower_transforms.append(Transform3D(basis, origin + Vector3.UP * 2.2 * scale))
+			middle_transforms.append(Transform3D(basis, origin + Vector3.UP * 2.95 * scale))
+			upper_transforms.append(Transform3D(basis, origin + Vector3.UP * 3.7 * scale))
 	_fill_multimesh(trunk_mm, trunk_transforms)
 	_fill_multimesh(lower_mm, lower_transforms)
 	_fill_multimesh(middle_mm, middle_transforms)
 	_fill_multimesh(upper_mm, upper_transforms)
+	_fill_multimesh(broadleaf_mm, broadleaf_transforms)
 	_add_multimesh(root, "TreeTrunks", trunk_mm, tree_trunk_material)
 	_add_multimesh(root, "CanopyLower", lower_mm, tree_leaf_material)
 	_add_multimesh(root, "CanopyMiddle", middle_mm, tree_leaf_material)
 	_add_multimesh(root, "CanopyUpper", upper_mm, tree_leaf_material)
+	_add_multimesh(root, "BroadleafCanopies", broadleaf_mm, tree_broadleaf_material)
 	var rock_mm := _new_multimesh(rock_mesh)
 	var rock_transforms: Array[Transform3D] = []
 	for i in range(ROCKS_PER_CHUNK):
@@ -528,36 +552,7 @@ func _add_multimesh(parent: Node3D, node_name: String, data: MultiMesh, material
 
 
 func _build_ridge_town() -> void:
-	var wall_material := StandardMaterial3D.new()
-	wall_material.albedo_color = Color("#e4d8b6")
-	wall_material.roughness = 0.9
-	var roof_material := StandardMaterial3D.new()
-	roof_material.albedo_color = Color("#bf7357")
-	roof_material.roughness = 0.9
-	roof_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	var tower_material := StandardMaterial3D.new()
-	tower_material.albedo_color = Color("#d4c8a9")
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 112358
-	for i in range(13):
-		var x := -24.0 + float(i % 7) * 8.0 + rng.randf_range(-1.2, 1.2)
-		var z := -65.0 - float(i / 7) * 7.0 + rng.randf_range(-1.0, 1.0)
-		var base := Vector3(x, height_at(x, z), z)
-		_add_box(
-			"CottageWall_%02d" % i,
-			Vector3(4.7, 3.1, 4.1),
-			base + Vector3(0, 1.55, 0),
-			wall_material
-		)
-		_add_roof(base + Vector3(0, 3.3, 0), roof_material, 2.65, 2.2)
-	for i in range(3):
-		var x := -25.0 + i * 25.0
-		var z := -75.0
-		var base := Vector3(x, height_at(x, z), z)
-		_add_box(
-			"RidgeTower_%d" % i, Vector3(6.0, 11.0, 6.0), base + Vector3(0, 5.5, 0), tower_material
-		)
-		_add_roof(base + Vector3(0, 11.2, 0), roof_material, 3.5, 3.0)
+	AlpineEnvironment.build(self, Callable(self, "height_at"))
 
 
 func _add_box(node_name: String, box_size: Vector3, at: Vector3, material: Material) -> void:
