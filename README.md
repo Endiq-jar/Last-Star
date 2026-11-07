@@ -28,7 +28,7 @@ repository**, no Unity, no Gradle, no Android Studio required.
 Works on **every Android device since Android 5.0 (API 21)** — 32-bit, 64-bit,
 ARM and x86. No permissions at all: no internet, no ads, no analytics, ~733 KiB.
 Signed with APK schemes v1 + v2 + v3
-(SHA-256 `e58044ba5e238467480de86ada112418910bcd6f92d93f602e69c21fedce64ec`).
+(SHA-256 `09bb9bc61b88459b93e72296d860750f3a93932ad4c8c2db1c3c9404a0e0e199`).
 
 ### Controls
 
@@ -100,7 +100,7 @@ the volume, toggles, name and page choices persist across launches.
 
 **No UI toolkit, no fonts, no drawables.** Every screen is batched triangles
 (`UiBatch`) drawn in one GL call. Scene prop culling is sampled in headless tests:
-the current worst sampled region view is **700 of a 900 prop-draw budget**, and
+the current worst sampled region view is **556 of a 900 prop-draw budget**, and
 the renderer exposes the completed frame's mesh draw-call count for profiling. The typeface is `VectorFont`: a Trajan-style
 serif described as strokes in source, scan-converted at start-up into a signed
 distance-field atlas (320×322 bytes, ~20 ms on a desktop JVM), so 8-pixel
@@ -203,8 +203,9 @@ place them:
 Everything else is scattered by role: 380 trees, 210 rocks, 760 plants, 2,200
 grass tufts, 900 flowers, 260 mushrooms, 110 logs, 55 stumps, 150 cliff blocks
 and 24 hills, on a grid that keeps landmark clearings and the player's path open.
-Per-role draw distances (grass 30 m … cliffs 200 m) keep the frame cheap: the
-world is dressed with thousands of props, but only what is near you is drawn.
+Per-role draw distances keep the scene legible and within the measured budget:
+grass tufts 4 m, small flower cards 4.5 m, meadow shrubs and blossom beds 18 m,
+rocks 28 m and trees 70 m. The painted terrain carries the distant meadow.
 
 Colour and scale are normalised at bake time so the imported art reads as part
 of the same Genshin-like palette as the procedural terrain. Full attribution and

@@ -407,11 +407,10 @@ public final class SceneRenderer {
     private float drawDistance(int modelIndex) {
         switch (models.get(modelIndex).role) {
             case ModelLibrary.GRASS:
-                // Past about fourteen metres a grass clump is a couple of
-                // pixels, and the terrain's own meadow colour is already under
-                // it. Culling here is what keeps the draw count in the low
-                // thousands while the ground is still carpeted where it counts.
-                return 10f;
+                // Tiny imported tufts merge into the terrain at distance; keep
+                // individual meshes near the player and let the painted meadow
+                // carry the far ground, avoiding a lawn of visible cards.
+                return 4f;
             case ModelLibrary.FLOWER:
                 return 4.5f;
             case ModelLibrary.MUSHROOM:

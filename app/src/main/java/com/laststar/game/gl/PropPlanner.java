@@ -439,7 +439,7 @@ public final class PropPlanner {
         // the ground. What makes it grass is overlap -- small patches packed
         // until they merge into a carpet, with the terrain's own meadow colour
         // showing through the gaps.
-        scatterPack(models, terrain, seed + 5501, "pk_grass", 40000, 0.55f, 2.4f);
+        scatterPack(models, terrain, seed + 5501, "pk_grass", 30000, 0.20f, 1.5f);
     }
 
     /**
@@ -502,7 +502,7 @@ public final class PropPlanner {
                 // clear spawn/camp, with soft edges from summed random offsets.
                 int bed = i % 8;
                 float angle = (float) (bed * Math.PI * 0.25) + 0.23f;
-                float radius = 34f + (bed % 3) * 7f;
+                float radius = 22f + (bed % 3) * 6f;
                 float jx = (r.nextFloat() + r.nextFloat() + r.nextFloat()
                         + r.nextFloat() - 2f) * 7f;
                 float jz = (r.nextFloat() + r.nextFloat() + r.nextFloat()
@@ -548,7 +548,7 @@ public final class PropPlanner {
                 // clear spawn/camp, with soft edges from summed random offsets.
                 int bed = i % 8;
                 float angle = (float) (bed * Math.PI * 0.25) + 0.23f;
-                float radius = 34f + (bed % 3) * 7f;
+                float radius = 22f + (bed % 3) * 6f;
                 float jx = (r.nextFloat() + r.nextFloat() + r.nextFloat()
                         + r.nextFloat() - 2f) * 7f;
                 float jz = (r.nextFloat() + r.nextFloat() + r.nextFloat()
@@ -569,7 +569,10 @@ public final class PropPlanner {
             if (blocked(x, z, minGap) || onBridgeApproach(x, z)) {
                 continue;
             }
-            float scale = m.scaleTo(m.targetSize * (0.78f + r.nextFloat() * 0.5f));
+            float sizeFactor = "pk_grass".equals(name)
+                    ? 0.24f + r.nextFloat() * 0.18f
+                    : 0.78f + r.nextFloat() * 0.5f;
+            float scale = m.scaleTo(m.targetSize * sizeFactor);
             // The tint multiplies the vertex colour, so it can only darken a
             // channel or leave it alone; anything above 1 washes towards white.
             // A gentle drift towards straw or towards deep green is enough to
@@ -1110,7 +1113,7 @@ public final class PropPlanner {
 
     private float visibleRadius(int model) {
         switch (library.get(model).role) {
-            case ModelLibrary.GRASS: return 10f;
+            case ModelLibrary.GRASS: return 4f;
             case ModelLibrary.FLOWER: return 4.5f;
             case ModelLibrary.MUSHROOM: return 22f;
             case ModelLibrary.PLANT: return 18f;
