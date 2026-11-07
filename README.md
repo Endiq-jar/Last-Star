@@ -10,8 +10,8 @@ build, not the Godot project. It remains as the last verified Android fallback
 while Godot gameplay and Android export are migrated. See
 [`docs/GODOT_MIGRATION.md`](docs/GODOT_MIGRATION.md) for current status.
 
-[![Legacy APK](https://img.shields.io/badge/legacy%20APK-v1.0.0-2ea44f)](apk/last-star-1.0.0.apk)
-[![legacy APK size](https://img.shields.io/badge/legacy%20APK-756%20KiB-informational)]()
+[![APK](https://img.shields.io/badge/legacy%20APK-v1.0.0-2ea44f)](apk/last-star-1.0.0.apk)
+[![APK size](https://img.shields.io/badge/legacy%20APK-756%20KiB-informational)]()
 [![native tests](https://img.shields.io/badge/native%20headless%20checks-13%2C622%20passing-brightgreen)]()
 [![licence](https://img.shields.io/badge/licence-EPL--2.0-lightgrey)](LICENSE)
 
