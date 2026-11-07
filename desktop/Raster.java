@@ -499,15 +499,15 @@ public final class Raster {
         float mid = band(ndl, 0.24f);
         float lit = band(ndl, 0.58f);
 
-        float shadowR = cr * 0.34f * (0.88f + 0.12f * clamp01(ambient[0]));
-        float shadowG = cg * 0.40f * (0.88f + 0.12f * clamp01(ambient[1]));
-        float shadowB = cb * 0.61f * (0.88f + 0.12f * clamp01(ambient[2]));
-        float midR = cr * (0.58f + sunR * 0.08f);
-        float midG = cg * (0.64f + sunG * 0.08f);
-        float midB = cb * (0.79f + sunB * 0.08f);
-        float fullR = cr * (0.77f + sunR * 0.10f);
-        float fullG = cg * (0.81f + sunG * 0.10f);
-        float fullB = cb * (0.91f + sunB * 0.10f);
+        float shadowR = cr * 0.43f * (0.86f + 0.14f * clamp01(ambient[0]));
+        float shadowG = cg * 0.53f * (0.86f + 0.14f * clamp01(ambient[1]));
+        float shadowB = cb * 0.67f * (0.86f + 0.14f * clamp01(ambient[2]));
+        float midR = cr * (0.62f + sunR * 0.06f);
+        float midG = cg * (0.69f + sunG * 0.06f);
+        float midB = cb * (0.82f + sunB * 0.06f);
+        float fullR = cr * (0.83f + sunR * 0.05f);
+        float fullG = cg * (0.89f + sunG * 0.05f);
+        float fullB = cb * (0.97f + sunB * 0.05f);
         float r = lerp(shadowR, midR, mid);
         float g = lerp(shadowG, midG, mid);
         float b = lerp(shadowB, midB, mid);

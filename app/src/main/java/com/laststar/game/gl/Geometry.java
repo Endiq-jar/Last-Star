@@ -83,9 +83,9 @@ public final class Geometry {
 
                 // Base meadow: a warm yellow-green in the sun, deepening to a
                 // saturated teal-green in the hollows.
-                float gr = Noise.lerp(0.30f, 0.50f, p1) + 0.035f * blend;
-                float gg = Noise.lerp(0.56f, 0.78f, p1) + 0.035f * blend;
-                float gb = Noise.lerp(0.26f, 0.38f, p1) + 0.030f * blend;
+                float gr = Noise.lerp(0.27f, 0.45f, p1) + 0.035f * blend;
+                float gg = Noise.lerp(0.61f, 0.81f, p1) + 0.035f * blend;
+                float gb = Noise.lerp(0.22f, 0.34f, p1) + 0.030f * blend;
 
                 // Mid-scale clumps: this is what stops the field looking like
                 // a lawn and starts it looking painted.
@@ -101,10 +101,10 @@ public final class Geometry {
                 gb += speck * 0.75f;
 
                 // Dry earth: warm sand patches showing through the grass.
-                float dirtT = Noise.smoothstep(0.66f, 0.94f, p2) * 0.80f;
-                gr = lerp(gr, 0.76f, dirtT);
-                gg = lerp(gg, 0.62f, dirtT);
-                gb = lerp(gb, 0.42f, dirtT);
+                float dirtT = Noise.smoothstep(0.72f, 0.97f, p2) * 0.58f;
+                gr = lerp(gr, 0.66f, dirtT);
+                gg = lerp(gg, 0.56f, dirtT);
+                gb = lerp(gb, 0.35f, dirtT);
 
                 // Rock on any real gradient. The threshold is deliberately low:
                 // a 1-in-3 mountain face is only slope 0.5 here, and the whole
@@ -126,6 +126,20 @@ public final class Geometry {
                 gr = lerp(gr, 0.86f, sandT);
                 gg = lerp(gg, 0.79f, sandT);
                 gb = lerp(gb, 0.60f, sandT);
+
+                // A narrow, globally aligned footpath winds through the meadow.
+                // It is baked into vertex colour, so it remains seamless across
+                // streamed chunk edges without a texture or extra draw call.
+                float trailNoise = fastNoise(z * 0.018f, 7.3f)
+                        - fastNoise(0f, 7.3f);
+                float trailX = trailNoise * 18f;
+                float trailD = Math.abs(x - trailX);
+                float trail = (1f - Noise.smoothstep(1.4f, 3.2f, trailD)) * 0.72f;
+                trail *= (1f - sandT * 0.90f) * (1f - rockT * 0.60f);
+                float trailVariation = (p3 - 0.5f) * 0.06f;
+                gr = lerp(gr, 0.63f + trailVariation, trail);
+                gg = lerp(gg, 0.53f + trailVariation, trail);
+                gb = lerp(gb, 0.34f + trailVariation, trail);
 
                 // Snow on the summits only. The band is broken up by noise so
                 // the snowline is ragged rather than a painted contour, and it

@@ -13,7 +13,7 @@ public final class VillageLayout {
 
     public static final class House {
         public final float x, z, yaw;
-        House(float x, float z, float yaw) { this.x = x; this.z = z; this.yaw = yaw; }
+        public House(float x, float z, float yaw) { this.x = x; this.z = z; this.yaw = yaw; }
     }
 
     private VillageLayout() { }

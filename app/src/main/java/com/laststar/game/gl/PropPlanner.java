@@ -160,6 +160,7 @@ public final class PropPlanner {
         // quietly never appears. Attempt counts are high for the same reason:
         // water, slope, spawn clearance and overlaps reject most candidates.
         buildLandmarks(models, terrain, seed);
+        buildRidgeTown(models, terrain, seed);
         buildRidges(models, terrain, seed);
         buildPeaks(models, terrain, seed);
         buildPackMountains(models, terrain, seed);
@@ -728,6 +729,83 @@ public final class PropPlanner {
                 return;
             }
         }
+    }
+
+    /** A small original ridge settlement gives the valley a far destination and scale. */
+    private void buildRidgeTown(ModelLibrary models, Terrain terrain, long seed) {
+        float[] site = null;
+        float bestScore = Float.MAX_VALUE;
+        Random random = new Random(seed ^ 0x4D595DF4D0F33173L);
+        for (int i = 0; i < 360; i++) {
+            float angle = (float) Math.toRadians(205f + random.nextFloat() * 130f);
+            float radius = 82f + random.nextFloat() * 12f;
+            float x = (float) Math.cos(angle) * radius;
+            float z = (float) Math.sin(angle) * radius;
+            float h = terrain.heightAt(x, z);
+            if (z > -42f || h < terrain.waterLevel + 2f || terrain.slopeAt(x, z) > 0.48f
+                    || tooCloseToLandmarks(x, z, 25f)) continue;
+            float score = terrain.slopeAt(x, z) * 8f - h * 0.012f;
+            if (score < bestScore) { bestScore = score; site = new float[]{x, z}; }
+        }
+        if (site == null) return;
+
+        float cx = site[0], cz = site[1];
+        float yaw = (float) Math.toDegrees(Math.atan2(-cx, -cz));
+        float a = (float) Math.toRadians(yaw);
+        float tx = (float) Math.cos(a), tz = -(float) Math.sin(a);
+        // Three varied towers form a distinctive skyline without copying a
+        // particular game's city or landmark silhouette.
+        townPart(models, terrain, "tower-square-mid", cx, cz, 10f, yaw, -0.1f);
+        townPart(models, terrain, "tower-square-top-roof", cx, cz, 10.5f, yaw, 6.2f);
+        townPart(models, terrain, "flag-banner-long", cx, cz, 3.2f, yaw, 8.6f);
+        for (int side = -1; side <= 1; side += 2) {
+            float x = cx + tx * side * 17f;
+            float z = cz + tz * side * 17f;
+            townPart(models, terrain, "tower-hexagon-base", x, z, 7.2f, yaw, -0.1f);
+            townPart(models, terrain, "tower-hexagon-roof", x, z, 6.8f, yaw, 4.2f);
+            townPart(models, terrain, "flag-banner-long", x, z, 2.6f, yaw, 5.7f);
+        }
+        // A low stepped curtain wall and open gate sit across the ridge-facing side.
+        for (int i = -3; i <= 3; i++) {
+            float[] p = townPoint(cx, cz, yaw, i * 5.5f, 17f);
+            townPart(models, terrain, i == -3 || i == 3 ? "wall-pillar" : "wall",
+                    p[0], p[1], 5.5f, yaw + 90f, -0.15f);
+        }
+        float[] gate = townPoint(cx, cz, yaw, 0f, 17f);
+        townPart(models, terrain, "gate", gate[0], gate[1], 6.5f, yaw + 90f, 0f);
+
+        float[][] roof = {{0.76f, 0.32f, 0.27f}, {0.22f, 0.53f, 0.59f},
+                {0.65f, 0.48f, 0.73f}, {0.80f, 0.62f, 0.34f},
+                {0.79f, 0.42f, 0.31f}, {0.25f, 0.47f, 0.66f},
+                {0.68f, 0.55f, 0.36f}};
+        float[][] local = {{-15f, -8f}, {-5f, -8f}, {5f, -8f}, {15f, -8f},
+                {-11f, -19f}, {0f, -20f}, {11f, -19f}};
+        for (int i = 0; i < local.length; i++) {
+            float[] p = townPoint(cx, cz, yaw, local[i][0], local[i][1]);
+            VillageLayout.House house = new VillageLayout.House(p[0], p[1], yaw);
+            addBuildingPart(models, terrain, house, "wall-wood-door", 0f, 2.0f,
+                    3.9f, yaw, 0f, 0f, 0f, 0f, 0f);
+            addBuildingPart(models, terrain, house, "wall-doorway-square", 0f, -2.0f,
+                    3.9f, yaw + 180f, 0f, 0f, 0f, 0f, 0f);
+            addBuildingPart(models, terrain, house, "wall-doorway-square", -2.0f, 0f,
+                    3.9f, yaw - 90f, 0f, 0f, 0f, 0f, 0f);
+            addBuildingPart(models, terrain, house, "wall-doorway-square", 2.0f, 0f,
+                    3.9f, yaw + 90f, 0f, 0f, 0f, 0f, 0f);
+            addBuildingPart(models, terrain, house, "roof-point", 0f, 0f,
+                    4.7f, yaw, 1.8f, roof[i][0], roof[i][1], roof[i][2], 0.22f);
+        }
+    }
+
+    private float[] townPoint(float cx, float cz, float yaw, float localX, float localZ) {
+        float a = (float) Math.toRadians(yaw);
+        return new float[]{cx + (float) Math.cos(a) * localX + (float) Math.sin(a) * localZ,
+                cz - (float) Math.sin(a) * localX + (float) Math.cos(a) * localZ};
+    }
+
+    private void townPart(ModelLibrary models, Terrain terrain, String name,
+                          float x, float z, float metres, float yaw, float yOffset) {
+        terrainHeight = terrain.heightAt(x, z) + yOffset;
+        place(models, name, x, z, metres, yaw, 0f);
     }
 
     private void buildLandmarks(ModelLibrary models, Terrain terrain, long seed) {
