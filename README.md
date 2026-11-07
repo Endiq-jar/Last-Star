@@ -28,7 +28,7 @@ repository**, no Unity, no Gradle, no Android Studio required.
 Works on **every Android device since Android 5.0 (API 21)** — 32-bit, 64-bit,
 ARM and x86. No permissions at all: no internet, no ads, no analytics, ~733 KiB.
 Signed with APK schemes v1 + v2 + v3
-(SHA-256 `47b3ee45e23443221b56242e74840742e783a7cc5a82208181759ddf4960ff71`).
+(SHA-256 `e58044ba5e238467480de86ada112418910bcd6f92d93f602e69c21fedce64ec`).
 
 ### Controls
 
@@ -100,7 +100,7 @@ the volume, toggles, name and page choices persist across launches.
 
 **No UI toolkit, no fonts, no drawables.** Every screen is batched triangles
 (`UiBatch`) drawn in one GL call. Scene prop culling is sampled in headless tests:
-the current worst sampled region view is **842 of a 900 prop-draw budget**, and
+the current worst sampled region view is **700 of a 900 prop-draw budget**, and
 the renderer exposes the completed frame's mesh draw-call count for profiling. The typeface is `VectorFont`: a Trajan-style
 serif described as strokes in source, scan-converted at start-up into a signed
 distance-field atlas (320×322 bytes, ~20 ms on a desktop JVM), so 8-pixel
@@ -170,6 +170,11 @@ the repository root, imported by `tools/fbx_import.py` and
 `tools/bake_mountain_pack.py`. The eleven are merged into the same baked file
 as the built-in 84, so `world.bin` is 95 models and 25,934 triangles, and
 everything is used *everywhere* in the world rather than in a showcase corner.
+The supplied alpine landscape screenshot is the 3D environment target: the
+playable terrain stays fully navigable, with rolling green slopes, rocks,
+conifers, distant mountain rings and broad blue-violet blossom drifts across the
+meadow—not a flat image pasted behind the player. The imported flower beds now
+form natural clusters, and their placement leaves the shallow shore reeds clear.
 
 | Pack asset | Role in the world |
 |---|---|

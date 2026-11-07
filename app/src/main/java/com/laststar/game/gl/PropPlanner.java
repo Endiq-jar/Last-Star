@@ -411,6 +411,9 @@ public final class PropPlanner {
      * that stepping anywhere on dry land puts the player in grass.</p>
      */
     private void buildPackGroundCover(ModelLibrary models, Terrain terrain, long seed) {
+        // Root the shore reeds before the meadow beds; otherwise dense blooms
+        // can claim every shallow-water spot and erase the asset from the scene.
+        scatterReeds(models, terrain, seed + 5519, "pk_flower", 50000);
         // Largest first. The grid is the overlap test, so a bush scattered
         // after 16k grass clumps finds almost every candidate blocked and
         // silently disappears; scattering the tall things first and letting
@@ -428,7 +431,6 @@ public final class PropPlanner {
         // standing in the shallows it is exactly the shape of a reed clump. It
         // goes only where the water line is, which is both where it looks right
         // and a place nothing else was dressing.
-        scatterReeds(models, terrain, seed + 5519, "pk_flower", 30000);
         scatterPack(models, terrain, seed + 5531, "pk_pebbles", 3200, 0.80f, 2.2f);
         // pk_spell-book is deliberately absent: the Wander is a single lore
         // object placed by World, not a shrub to be scattered 88 times.
@@ -494,6 +496,20 @@ public final class PropPlanner {
         for (int i = 0; i < attempts; i++) {
             float x = (r.nextFloat() * 2f - 1f) * half;
             float z = (r.nextFloat() * 2f - 1f) * half;
+            if ("pk_flowers".equals(name)) {
+                // The reference meadow has broad color drifts, not an even
+                // sprinkling. Eight beds follow the playable slopes around the
+                // clear spawn/camp, with soft edges from summed random offsets.
+                int bed = i % 8;
+                float angle = (float) (bed * Math.PI * 0.25) + 0.23f;
+                float radius = 34f + (bed % 3) * 7f;
+                float jx = (r.nextFloat() + r.nextFloat() + r.nextFloat()
+                        + r.nextFloat() - 2f) * 7f;
+                float jz = (r.nextFloat() + r.nextFloat() + r.nextFloat()
+                        + r.nextFloat() - 2f) * 7f;
+                x = (float) Math.cos(angle) * radius + jx;
+                z = (float) Math.sin(angle) * radius + jz;
+            }
             float h = terrain.heightAt(x, z);
             if (h < terrain.waterLevel + 0.35f) {
                 continue;
@@ -526,6 +542,20 @@ public final class PropPlanner {
         for (int i = 0; i < attempts; i++) {
             float x = (r.nextFloat() * 2f - 1f) * half;
             float z = (r.nextFloat() * 2f - 1f) * half;
+            if ("pk_flowers".equals(name)) {
+                // The reference meadow has broad color drifts, not an even
+                // sprinkling. Eight beds follow the playable slopes around the
+                // clear spawn/camp, with soft edges from summed random offsets.
+                int bed = i % 8;
+                float angle = (float) (bed * Math.PI * 0.25) + 0.23f;
+                float radius = 34f + (bed % 3) * 7f;
+                float jx = (r.nextFloat() + r.nextFloat() + r.nextFloat()
+                        + r.nextFloat() - 2f) * 7f;
+                float jz = (r.nextFloat() + r.nextFloat() + r.nextFloat()
+                        + r.nextFloat() - 2f) * 7f;
+                x = (float) Math.cos(angle) * radius + jx;
+                z = (float) Math.sin(angle) * radius + jz;
+            }
             float h = terrain.heightAt(x, z);
             if (h < terrain.waterLevel + 0.35f) {
                 continue;
@@ -1081,10 +1111,10 @@ public final class PropPlanner {
     private float visibleRadius(int model) {
         switch (library.get(model).role) {
             case ModelLibrary.GRASS: return 10f;
-            case ModelLibrary.FLOWER: return 10f;
+            case ModelLibrary.FLOWER: return 4.5f;
             case ModelLibrary.MUSHROOM: return 22f;
-            case ModelLibrary.PLANT: return 35f;
-            case ModelLibrary.ROCK: return 36f;
+            case ModelLibrary.PLANT: return 18f;
+            case ModelLibrary.ROCK: return 28f;
             case ModelLibrary.TREE: return 70f;
             case ModelLibrary.LOG: return 60f;
             case ModelLibrary.STUMP: return 45f;

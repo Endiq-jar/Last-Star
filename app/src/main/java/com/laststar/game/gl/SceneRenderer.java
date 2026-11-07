@@ -413,13 +413,13 @@ public final class SceneRenderer {
                 // thousands while the ground is still carpeted where it counts.
                 return 10f;
             case ModelLibrary.FLOWER:
-                return 10f;
+                return 4.5f;
             case ModelLibrary.MUSHROOM:
                 return 22f;
             case ModelLibrary.PLANT:
-                return 35f;
+                return 18f;
             case ModelLibrary.ROCK:
-                return 36f;
+                return 28f;
             case ModelLibrary.TREE:
                 return 70f;
             case ModelLibrary.LOG:
