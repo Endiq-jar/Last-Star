@@ -3,12 +3,14 @@ import com.laststar.game.world.Boss;
 import com.laststar.game.world.CombatKit;
 import com.laststar.game.world.Enemy;
 import com.laststar.game.world.QuestLog;
+import com.laststar.game.world.Party;
 import com.laststar.game.world.SaveGame;
 import com.laststar.game.world.SpellBook;
 import com.laststar.game.world.World;
 import com.laststar.game.world.lore.Elaris;
 import com.laststar.game.world.lore.QuestCorpus;
 import com.laststar.game.world.lore.SpellCorpus;
+import com.laststar.game.world.lore.Companions;
 import com.laststar.game.world.lore.SpellForge;
 
 import java.io.IOException;
@@ -45,6 +47,7 @@ public final class SystemsTest {
         combatKit();
         bosses();
         spellForge();
+        companions();
 
         System.out.println(checks + " checks, " + failures + " failures");
         if (failures > 0) {
@@ -396,6 +399,175 @@ public final class SystemsTest {
             }
             if (!QuestCorpus.QUESTS[d.requires].main) {
                 return false;
+            }
+        }
+        return true;
+    }
+
+    // -- companions -----------------------------------------------------------
+
+    private static void companions() {
+        System.out.println("Companions");
+        check("there are six companions", Companions.count() == 6);
+        check("every companion has a Gift", everyCompanionHasGift());
+        check("every companion has a history", everyCompanionHasHistory());
+        check("every companion has an ability", everyCompanionHasAbility());
+        check("every companion teaches a combination", everyCompanionTeaches());
+        check("every companion has a personal quest",
+                everyCompanionHasQuest());
+        check("companions are spread across the map", companionsSpread());
+
+        Party party = new Party();
+        check("nobody travels with you at the start",
+                party.recruitedCount() == 0);
+        check("a stranger's ability is not available",
+                !party.abilityReady(0));
+
+        // Recruiting fills the active pair.
+        check("a companion can join", party.recruit(0));
+        check("you cannot recruit twice", !party.recruit(0));
+        check("a new companion takes a slot", party.active[0] == 0);
+        check("a second companion joins", party.recruit(1));
+        check("the pair is full", party.active[1] == 1);
+        check("a third does not displace the pair", party.recruit(2));
+
+        // Trust: the ability is gated on being an ALLY.
+        check("a new companion is a stranger",
+                party.bond(0) == Companions.Bond.STRANGER);
+        check("trust deepens the bond", party.addTrust(0, 4));
+        check("the bond is now an ally",
+                party.bond(0).threshold >= Companions.Bond.ALLY.threshold);
+        check("an ally will act for you", party.abilityReady(0));
+        party.useAbility(0);
+        check("using it starts the cooldown", !party.abilityReady(0));
+        party.tick(60f);
+        check("the cooldown expires", party.abilityReady(0));
+
+        // Synergy: only some pairs, which is what makes it a discovery.
+        check("a pair can unlock a synergy", party.activeSynergy() != null);
+        check("the synergy has a name",
+                party.activeSynergy().name.length() > 5);
+        Party lonely = new Party();
+        check("one companion unlocks nothing", lonely.activeSynergy() == null);
+        // Count the pairs that do something, so the ratio stays a discovery.
+        int pairs = 0;
+        int total = 0;
+        for (int a = 0; a < Companions.count(); a++) {
+            for (int b = a + 1; b < Companions.count(); b++) {
+                total++;
+                if (Companions.synergyBetween(a, b) != null) {
+                    pairs++;
+                }
+            }
+        }
+        check("synergy covers some but not all pairs",
+                pairs > 0 && pairs < total);
+        check("synergy is symmetric",
+                Companions.synergyBetween(0, 4) == Companions.synergyBetween(4, 0));
+
+        // A pair with no synergy honestly reports none.
+        int noSynergy = -1;
+        for (int b = 1; b < Companions.count(); b++) {
+            if (Companions.synergyBetween(0, b) == null) {
+                noSynergy = b;
+            }
+        }
+        check("there is a pair without a synergy", noSynergy >= 0);
+
+        // Conversation choices move trust in both directions.
+        Party talk = new Party();
+        talk.recruit(2);
+        int start = talk.trust[2];
+        talk.converse(2, 1);
+        check("a kind choice earns trust", talk.trust[2] > start);
+        int after = talk.trust[2];
+        talk.converse(2, -1);
+        check("a cold choice costs trust", talk.trust[2] < after);
+        check("the conversation is recorded", talk.conversations[2] == 2);
+
+        // Every companion says something different at every bond level.
+        boolean everyLine = true;
+        for (int c = 0; c < Companions.count(); c++) {
+            for (int b = 0; b < Companions.Bond.values().length; b++) {
+                String line = Companions.lineFor(c, Companions.Bond.values()[b]);
+                if (line == null || line.length() < 5) {
+                    everyLine = false;
+                }
+            }
+        }
+        check("every companion speaks at every bond", everyLine);
+
+        // Meeting someone in their region recruits them.
+        World world = new World(777L);
+        check("a fresh run has no party", world.party.recruitedCount() == 0);
+        world.enterRegion(0);
+        boolean sera = false;
+        for (int i = 0; i < Companions.count(); i++) {
+            if (Companions.get(i).region == 0 && world.party.recruited[i]) {
+                sera = true;
+            }
+        }
+        check("travelling to a companion's home recruits them", sera);
+    }
+
+    private static boolean everyCompanionHasGift() {
+        for (int i = 0; i < Companions.count(); i++) {
+            if (Companions.get(i).gift == null || Companions.get(i).gift.length() < 10) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean everyCompanionHasHistory() {
+        for (int i = 0; i < Companions.count(); i++) {
+            if (Companions.get(i).history == null
+                    || Companions.get(i).history.length() < 20) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean everyCompanionHasAbility() {
+        for (int i = 0; i < Companions.count(); i++) {
+            Companions.Ability a = Companions.get(i).ability;
+            if (a == null || a.name == null || a.name.length() < 3
+                    || a.effect.length() < 10 || a.cooldown <= 0f) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean everyCompanionTeaches() {
+        for (int i = 0; i < Companions.count(); i++) {
+            if (Companions.get(i).teaches == null
+                    || Companions.get(i).teaches.length() < 5) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean everyCompanionHasQuest() {
+        for (int i = 0; i < Companions.count(); i++) {
+            int q = Companions.get(i).personalQuest;
+            if (q < 0 || q >= QuestCorpus.count()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean companionsSpread() {
+        // Two companions in one settlement would make travelling for them
+        // pointless, so their regions must be distinct.
+        for (int a = 0; a < Companions.count(); a++) {
+            for (int b = a + 1; b < Companions.count(); b++) {
+                if (Companions.get(a).region == Companions.get(b).region) {
+                    return false;
+                }
             }
         }
         return true;

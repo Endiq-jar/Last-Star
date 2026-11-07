@@ -74,6 +74,8 @@ public final class World {
     public final SpellBook spells = new SpellBook();
     /** The blade: timing, combos, parry, dodge, finishers. */
     public final CombatKit combat = new CombatKit();
+    /** Who travels with the player, and how far they trust them. */
+    public final Party party = new Party();
     /** The region's boss, once it has been woken. */
     public Boss boss;
     /** Where the boss stands, or null before it wakes. */
@@ -178,6 +180,20 @@ public final class World {
         player.respawn(spawnPoint());
         buildLevel(level());
         quests.report(QuestCorpus.Kind.TRAVEL, region.name, 1);
+        // Meeting a companion in their own settlement is how the party grows.
+        for (int i = 0; i < com.laststar.game.world.lore.Companions.count(); i++) {
+            com.laststar.game.world.lore.Companions.Def c =
+                    com.laststar.game.world.lore.Companions.get(i);
+            if (!party.recruited[i] && c.region == index) {
+                if (party.recruit(i)) {
+                    showMessage(c.name + " JOINS YOU", 2.8f, 0.7f);
+                    // The personalised quest opens with them.
+                    if (c.personalQuest >= 0) {
+                        quests.open(c.personalQuest);
+                    }
+                }
+            }
+        }
         showMessage(region.name + " -- " + region.identity, 2.8f, 0.6f);
     }
 
@@ -507,6 +523,7 @@ public final class World {
         handleCombat(dt, input);
         updateEnemies(dt);
         updateBoss(dt);
+        party.tick(dt);
         updateShards(dt);
         updatePickups(dt);
         updateEnvironment(dt, input);
@@ -1362,6 +1379,80 @@ public final class World {
             onBossDefeated();
         }
         return dealt;
+    }
+
+    /**
+     * Uses the active companion's ability.
+     *
+     * <p>The abilities differ in kind rather than in number -- a ward, a mark, a
+     * step, a ring, a reset, a dodge buff -- so each is resolved here where the
+     * world's own systems are reachable.</p>
+     *
+     * @return whether anything happened
+     */
+    public boolean useCompanionAbility(int slot) {
+        if (slot < 0 || slot >= party.active.length) {
+            return false;
+        }
+        int who = party.active[slot];
+        if (!party.abilityReady(who)) {
+            return false;
+        }
+        String name = com.laststar.game.world.lore.Companions.get(who).name;
+        switch (who) {
+            case 0:
+                // SERA: a ward, longer if MIRA is holding the page open.
+                float seconds = 6f;
+                if (party.activeSynergy() != null) {
+                    seconds = 12f;
+                }
+                player.invulnerability = Math.max(player.invulnerability, seconds);
+                break;
+            case 1:
+                // KESH: mark everything near, which the swings then exploit.
+                for (int i = 0; i < enemies.size(); i++) {
+                    Enemy e = enemies.get(i);
+                    if (e.alive && e.position.sub(player.position).horizontalLength() < 18f) {
+                        e.slowTimer = Math.max(e.slowTimer, 4f);
+                        e.staggerTimer = Math.max(e.staggerTimer, 0.4f);
+                    }
+                }
+                break;
+            case 2:
+                // NADI: put the player where she is pointing.
+                Vec3 fwd = new Vec3((float) Math.sin(Math.toRadians(player.yaw)), 0f,
+                        (float) Math.cos(Math.toRadians(player.yaw)));
+                Vec3 to = player.position.add(fwd.mul(3f));
+                player.position = to.withY(groundHeight(to.x, to.z));
+                break;
+            case 3:
+                // BRANN: a ring of frost that slows everything near.
+                for (int i = 0; i < enemies.size(); i++) {
+                    Enemy e = enemies.get(i);
+                    if (e.alive && e.position.sub(player.position).horizontalLength() < 9f) {
+                        e.slowTimer = Math.max(e.slowTimer, 5f);
+                    }
+                }
+                break;
+            case 4:
+                // MIRA: the last spell is ready again.
+                if (spells.lastCast >= 0 && spells.lastCast < spells.equipped.length) {
+                    SpellBook.Page p = spells.pageAt(spells.lastCast);
+                    if (p != null) {
+                        p.cooldownLeft = 0f;
+                    }
+                }
+                break;
+            case 5:
+            default:
+                // WREN: the next few dodges are free.
+                combat.cooldown = 0f;
+                break;
+        }
+        party.useAbility(who);
+        showMessage(name + ": " + com.laststar.game.world.lore.Companions
+                .get(who).ability.name, 1.8f, 0.5f);
+        return true;
     }
 
     /** Everything a boss kill is worth. */
