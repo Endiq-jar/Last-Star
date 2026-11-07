@@ -27,7 +27,7 @@ public final class SpellScreen implements Screen {
     private static final int ROWS = 5;
 
     /** Which pages the list is showing. */
-    private static final String[] TABS = {"AWAKE", "ALL", "BY SCHOOL", "SLEEPING"};
+    private static final String[] TABS = {"AWAKE", "ALL", "SCHOOL", "SLEEPING"};
 
     public int activeTab;
     public int selected;
@@ -171,7 +171,9 @@ public final class SpellScreen implements Screen {
     }
 
     private static float tabX(float w, int i) {
-        return w * 0.215f + i * w * 0.142f;
+        // Six tabs' worth of pitch across four: the longest label is "BY
+        // SCHOOL", and a tighter pitch runs it into its neighbour.
+        return w * 0.165f + i * w * 0.155f;
     }
 
     private static float listX() {
@@ -211,8 +213,8 @@ public final class SpellScreen implements Screen {
         for (int i = 0; i < TABS.length; i++) {
             float cx = tabX(w, i);
             boolean active = i == activeTab;
-            float tw = Math.max(w * 0.115f,
-                    UiBatch.textSpacedWidth(TABS[i], font, 1, 0.7f) + 24f);
+            float tw = Math.min(w * 0.145f, Math.max(w * 0.105f,
+                    UiBatch.textSpacedWidth(TABS[i], font, 1, 0.5f) + 20f));
             float th = 22f;
             float y = tabY(h);
             float[] shape = {
@@ -230,7 +232,8 @@ public final class SpellScreen implements Screen {
                 b.polygon(shape, 0.06f, 0.07f, 0.10f, (0.80f + tabPress[i] * 0.12f) * alpha);
             }
             float[] tc = active ? Style.INK : Style.CREAM;
-            b.textSpacedCentred(TABS[i], cx, y - font.capHeight(1) * 0.5f, 1, 0.7f,
+            b.textSpacedCentred(fit(TABS[i], font, tw - 14f, 1, 0.5f), cx,
+                    y - font.capHeight(1) * 0.5f, 1, 0.5f,
                     tc[0], tc[1], tc[2], alpha, font);
         }
 
@@ -349,8 +352,8 @@ public final class SpellScreen implements Screen {
                 Style.GOLD[0], Style.GOLD[1], Style.GOLD[2], alpha * 0.9f, font);
 
         // Mastery: level, bar and where the next stage lands.
-        float barX = cx + 26f;
-        float barW = cw - 52f;
+        float barX = cx + 20f;
+        float barW = cw - 40f;
         float barY = my + 58f;
         float frac = p.awake
                 ? (p.level >= SpellBook.MAX_LEVEL ? 1f : p.xp / p.xpToNext())
@@ -399,9 +402,13 @@ public final class SpellScreen implements Screen {
         float by = cy + ch + 26f;
         int slot = equippedSlot(spell);
         boolean canEquip = p.awake;
-        GenshinKit.lozenge(b, bx, by, 120f, 27f, canEquip, equipPress, alpha);
-        String label = slot >= 0 ? "SLOT " + (slot + 1) + " -- UNEQUIP"
+        String label = slot >= 0 ? "SLOT " + (slot + 1) + "  UNEQUIP"
                 : canEquip ? "EQUIP" : "SLEEPING";
+        // The lozenge is sized to the label rather than the label crammed into
+        // a fixed width: "SLOT 1  UNEQUIP" is the longest state it can show.
+        float labelW = UiBatch.textSpacedWidth(label, font, 1, 2.2f);
+        float lozengeW = Math.max(120f, labelW + 44f);
+        GenshinKit.lozenge(b, bx, by, lozengeW, 27f, canEquip, equipPress, alpha);
         b.textSpacedCentred(label, bx, by - font.capHeight(1) * 0.5f, 1, 2.2f,
                 canEquip ? Style.IVORY[0] : Style.CREAM_DIM[0],
                 canEquip ? Style.IVORY[1] : Style.CREAM_DIM[1],
@@ -465,7 +472,7 @@ public final class SpellScreen implements Screen {
     @Override
     public Action hit(float x, float y, float w, float h, TabBar tabBar) {
         for (int i = 0; i < TABS.length; i++) {
-            if (Math.abs(x - tabX(w, i)) < w * 0.078f && Math.abs(y - tabY(h)) < 20f) {
+            if (Math.abs(x - tabX(w, i)) < w * 0.075f && Math.abs(y - tabY(h)) < 20f) {
                 activeTab = i;
                 selected = 0;
                 scroll = 0;
@@ -501,7 +508,7 @@ public final class SpellScreen implements Screen {
         // Equip / unequip.
         float bx = cardX(w) + cardW(w) * 0.5f;
         float by = cardY(h) + cardH(h) + 26f;
-        if (Math.abs(x - bx) < 64f && Math.abs(y - by) < 18f) {
+        if (Math.abs(x - bx) < 96f && Math.abs(y - by) < 20f) {
             equipPress = 1f;
             toggleEquip();
             return Action.NONE;

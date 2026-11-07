@@ -35,6 +35,8 @@ public final class MenuPreview {
         // Interaction proof: an opened dropdown and a different quest tab.
         shoot(outDir, w, h, "settings-dropdown", Menu.Page.SETTINGS, "dropdown");
         shoot(outDir, w, h, "quests-side", Menu.Page.QUESTS, "side");
+        shoot(outDir, w, h, "spells", Menu.Page.SPELLS, null);
+        shoot(outDir, w, h, "spells-all", Menu.Page.SPELLS, "all");
         shoot(outDir, w, h, "font-sheet", Menu.Page.HOME, "font");
 
         System.out.println("menu previews written to " + outDir);
@@ -82,6 +84,9 @@ public final class MenuPreview {
             for (int i = 0; i < 10; i++) {
                 menu.update(1f / 60f);
             }
+        } else if ("all".equals(variant)) {
+            menu.tap(720 * 0.215f + 1 * 720 * 0.142f, 405 * 0.175f, 720, 405);
+            menu.update(1f / 60f);
         } else if ("side".equals(variant)) {
             menu.quests.activeTab = 2;
             menu.quests.selectedQuest = 2;
