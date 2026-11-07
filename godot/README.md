@@ -90,13 +90,14 @@ Uses the mono/.NET edition of Godot (`godot-mono`, or set `GODOT_BIN` to overrid
 
 ## Last Star migration status
 
-This folder is a separately staged Godot migration prototype based on upstream
-commit `774112bc3d689c2690f8b40a3955f321dfc51542`. The upstream exploration
-scene and terrain systems are still present; Last Star's Android controls,
-combat, quests, saves, characters, and exact UI palette have **not** been ported.
-The existing native Android app remains the tested build. See
-[`../docs/GODOT_MIGRATION.md`](../docs/GODOT_MIGRATION.md) for the reviewed
-repository choices, migration order, and licensing notes.
+This project is based on upstream commit `774112bc3d689c2690f8b40a3955f321dfc51542`.
+Its active main scene is now an original GDScript valley-game vertical slice
+with third-person movement, touch HUD, one basic enemy, and a finite procedural
+meadow. The original upstream C# exploration project remains in this folder
+for reference, but is not the active scene. Most Last Star systems still need
+migration, and this has not been exported or tested on Android. The existing
+native Android app remains the verified fallback. See
+[`../docs/GODOT_MIGRATION.md`](../docs/GODOT_MIGRATION.md) for scope and status.
 
 ## License
 

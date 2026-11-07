@@ -29,10 +29,10 @@ This is a focused review of repositories relevant to this game's engine and genr
 
 ## Migration status
 
-**Staged, not migrated or Android-verified.** The Godot base's display name and export filename have been made Last Star-specific. The project still runs the upstream terrain-exploration scene; the original Last Star gameplay systems are not yet ported. The current app's offline/no-permission constraint and exact UI palette remain requirements for any future mobile port.
+**Godot GDScript vertical slice is now the active scene in `godot/project.godot`; full feature parity and Android export are not complete.** The scene builds an original stylized meadow, continuous trail, multimesh forest, ridge town, water, a controllable third-person hero, one simple enemy, touch controls, attack/skill actions, a day-light rotation, and a local position save. The imported C# terrain project remains as reference content but is not the active scene. This is a finite prototype map, not the upstream project's endless streamed terrain and not a complete Genshin-scale RPG.
 
-Recommended port order: Android touch movement and camera; original player/combat loop; persistent save/day-night/world state; quests and UI; then replace placeholder flora and settlement models with assets whose redistribution terms are explicit. Keep the native APK available until the Godot APK builds and passes equivalent playthrough tests.
+Still to port: Last Star's full quest, inventory, spell, progression, companion, save-versioning, menu, and combat systems; robust Android touch/layout behavior; character animation; and mobile performance tuning. The exact UI palette, offline operation, and zero-permission requirement remain constraints. Keep the existing native APK available until a Godot Android APK builds and passes equivalent tests on a device.
 
 ## Validation constraints
 
-No Godot or .NET SDK is installed in this build workspace, so the staged C# project has not been compiled or exported. Do not describe it as a working Android build until that toolchain is available and the Godot Android export has been tested on a device. The existing native app's tests and APK workflow are independent of this prototype.
+No Godot executable or .NET SDK is installed in this build workspace. The new GDScript files pass the `gdtoolkit` parser/linter, but no Godot runtime, Android export, or device build could be run here. The existing native app's tests and APK workflow remain independent; passing those tests does not validate the Godot project.
