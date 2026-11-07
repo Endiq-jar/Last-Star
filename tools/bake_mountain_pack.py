@@ -37,22 +37,29 @@ SRC = 'assets_src/asset/game asset (FBX)'
 # (file, model name, role, target metres, base colour, scale mode)
 # 'height' for vertical props, 'width' for flat ground-cover cards,
 # 'span' for the bridge, whose longest axis is the walkway.
+#
+# Base colours are sampled from the Mountain (Textures) pack's Colored/ ALB
+# maps, not guessed -- see tools/sample_mountain_textures.py for how each one
+# was derived (including the three with no texture of their own: mountain,
+# rock2 and pebbles are variants of Rock01's sampled colour, and flowers is a
+# hue-rotation of Flower01's, since the pack ships no "Flowers01" map).
+# spell-book isn't part of this nature pack and keeps its original colour.
 ASSETS = [
-    ('Mountain01.fbx', 'mountain',   HILL,   260.0, (0.52, 0.56, 0.66), 'height'),
-    ('Tree01.fbx',     'tree',       TREE,     8.5, (0.34, 0.56, 0.30), 'height'),
-    ('Bush01.fbx',     'bush',       PLANT,    1.7, (0.30, 0.54, 0.28), 'height'),
-    ('Rock01.fbx',     'rock',       ROCK,     1.9, (0.56, 0.57, 0.62), 'height'),
-    ('Rock02.fbx',     'rock2',      ROCK,     2.6, (0.60, 0.59, 0.63), 'height'),
+    ('Mountain01.fbx', 'mountain',   HILL,   260.0, (0.44, 0.48, 0.54), 'height'),
+    ('Tree01.fbx',     'tree',       TREE,     8.5, (0.14, 0.25, 0.04), 'height'),
+    ('Bush01.fbx',     'bush',       PLANT,    1.7, (0.10, 0.36, 0.03), 'height'),
+    ('Rock01.fbx',     'rock',       ROCK,     1.9, (0.31, 0.37, 0.40), 'height'),
+    ('Rock02.fbx',     'rock2',      ROCK,     2.6, (0.33, 0.39, 0.42), 'height'),
     # Ground cover is sized by height, not width. Every one of these is
     # authored as a broad, low mound of clumps -- Grass01 is 115 wide against
     # 45 tall -- so scaling by width produces a wide flat plate lying on the
     # ground, which is exactly how it looked. These are the heights each thing
     # should stand at in metres.
-    ('Pebbles01.fbx',  'pebbles',    ROCK,     0.14, (0.64, 0.63, 0.66), 'height'),
-    ('Grass01.fbx',    'grass',      GRASS,    0.95, (0.42, 0.70, 0.34), 'height'),
-    ('Flower01.fbx',   'flower',     FLOWER,   0.52, (0.88, 0.46, 0.74), 'height'),
-    ('Flowers01.fbx',  'flowers',    FLOWER,   0.44, (0.95, 0.74, 0.36), 'height'),
-    ('Bridge01.fbx',   'bridge',     PATH,    14.0, (0.62, 0.48, 0.32), 'span'),
+    ('Pebbles01.fbx',  'pebbles',    ROCK,     0.14, (0.37, 0.43, 0.47), 'height'),
+    ('Grass01.fbx',    'grass',      GRASS,    0.95, (0.14, 0.36, 0.07), 'height'),
+    ('Flower01.fbx',   'flower',     FLOWER,   0.52, (0.13, 0.37, 0.45), 'height'),
+    ('Flowers01.fbx',  'flowers',    FLOWER,   0.44, (0.45, 0.13, 0.20), 'height'),
+    ('Bridge01.fbx',   'bridge',     PATH,    14.0, (0.21, 0.17, 0.10), 'span'),
     ('spell-book.fbx', 'spell-book', WANDER,   0.42, (0.42, 0.34, 0.74), 'span'),
 ]
 

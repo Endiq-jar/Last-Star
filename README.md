@@ -26,9 +26,9 @@ repository**, no Unity, no Gradle, no Android Studio required.
 3. Launch **Last Star**. Hold the phone in landscape.
 
 Works on **every Android device since Android 5.0 (API 21)** — 32-bit, 64-bit,
-ARM and x86. No permissions at all: no internet, no ads, no analytics, ~733 KiB.
+ARM and x86. No permissions at all: no internet, no ads, no analytics, ~753 KiB.
 Signed with APK schemes v1 + v2 + v3
-(SHA-256 `09bb9bc61b88459b93e72296d860750f3a93932ad4c8c2db1c3c9404a0e0e199`).
+(SHA-256 `16f1abd17393a169d4c0883d7085d8dce83f70b1a8204ca30c789c68dbd17607`).
 
 ### Controls
 
