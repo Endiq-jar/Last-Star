@@ -120,7 +120,7 @@ jobs:
           set -uo pipefail
           mkdir -p builds/android
           set +e
-          godot --headless --path . --export-debug "Android" builds/android/LastStar-debug.apk > "$RUNNER_TEMP/godot-export.log" 2>&1
+          godot --headless --verbose --path . --export-debug "Android" builds/android/LastStar-debug.apk > "$RUNNER_TEMP/godot-export.log" 2>&1
           export_status=$?
           set -e
           if [[ $export_status -ne 0 ]]; then
