@@ -99,6 +99,15 @@ jobs:
           export/android/android_sdk_path = "${ANDROID_HOME}"
           export/android/java_sdk_path = "${JAVA_HOME}"
           EOF
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/debug.keystore" \
+            -storepass android -keypass android -alias androiddebugkey \
+            -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 \
+            -validity 10000 -noprompt
+          sed -i \
+            -e "s|^keystore/debug=\"\"$|keystore/debug=\"$RUNNER_TEMP/debug.keystore\"|" \
+            -e 's|^keystore/debug_user=""$|keystore/debug_user="androiddebugkey"|' \
+            -e 's|^keystore/debug_password=""$|keystore/debug_password="android"|' \
+            export_presets.cfg
 
       - name: Import project and load the main scene headlessly
         run: |
