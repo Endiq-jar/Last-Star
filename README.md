@@ -26,9 +26,9 @@ repository**, no Unity, no Gradle, no Android Studio required.
 3. Launch **Last Star**. Hold the phone in landscape.
 
 Works on **every Android device since Android 5.0 (API 21)** — 32-bit, 64-bit,
-ARM and x86. No permissions at all: no internet, no ads, no analytics, ~669 KiB.
+ARM and x86. No permissions at all: no internet, no ads, no analytics, ~709 KiB.
 Signed with APK schemes v1 + v2 + v3
-(SHA-256 `e3a36439d048975689a3bad184c54e4accb20ee6721e774be1b4316a6f648c6c`).
+(SHA-256 `f65890836d0dbb42035749706ad000dcbf9519a33fdef73f614677ebd92e6e89`).
 
 ### Controls
 
@@ -74,7 +74,8 @@ filigree frames with corner scrollwork, diamond tabs, parchment cards and teal
 | **Home** | Title plate, hero medallion, `‹ NAME ›` selector, **START** |
 | **About** | Illuminated scroll: the story, the task, the controls, build info |
 | **Shop** | Merchant's alcove, purse, eight trinket cards with prices; tap to inspect, PURCHASE to confirm |
-| **Quests** | Completed / Side / Main / Serve Quests tabs, a ribbon list and a parchment detail card with reward, status and shard pips |
+| **Quests** | The live journal: Active / Main / Side / Done over the 190 authored quests, filtered to the settlement you are in, with objective, reward, level and progress |
+| **The Wander** | The spell book: 101 pages, four views, mastery to 30, the next stage and what it grants, and the four-slot action bar |
 | **Wardrobe** | Category rail, the character standing on a lit dais, four body tiles, a 4×4 skin-and-eye swatch grid, HAIR / LIPS / FACE chips and **EQUIP** |
 | **Settings** | Five roman-numeral set tabs, an in-panel vertical volume slider, AUDIO / HAPTICS / CAMERA SHAKE toggles, a difficulty dropdown and **RESET** |
 
@@ -95,6 +96,16 @@ small-caps stay crisp at any scale without shipping a TTF. Backdrops
 shafts, bokeh and drifting motes.
 
 ### The game
+
+**Elaris** has fourteen settlements, each with its own terrain, palette, Hollow
+creatures and boss. **The Wander** is a spell book of 101 pages that starts with
+four awake; the rest lie in the world waiting to be found, and every page levels
+to thirty along its own curve, gaining real mechanics -- a bolt that explodes, a
+ward that reflects, a field that pulls -- rather than only more damage.
+**190 quests** (25 main, 165 side) run across the settlements in a single
+unbroken chain. The blade has light, heavy, charged, counter and finishing
+attacks, a perfect dodge and a parry, and each region's boss changes the fight
+at every phase instead of only gaining health.
 
 Six star shards have fallen across a fragmented landscape guarded by **Wardens**.
 Collect all six before they overwhelm you. Every shard you recover pushes the
