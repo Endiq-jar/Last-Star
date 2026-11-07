@@ -26,9 +26,9 @@ repository**, no Unity, no Gradle, no Android Studio required.
 3. Launch **Last Star**. Hold the phone in landscape.
 
 Works on **every Android device since Android 5.0 (API 21)** — 32-bit, 64-bit,
-ARM and x86. No permissions at all: no internet, no ads, no analytics, ~709 KiB.
+ARM and x86. No permissions at all: no internet, no ads, no analytics, ~721 KiB.
 Signed with APK schemes v1 + v2 + v3
-(SHA-256 `f65890836d0dbb42035749706ad000dcbf9519a33fdef73f614677ebd92e6e89`).
+(SHA-256 `08840c4bca2fda34f2755d568f7de5aa2310d395168625ca3a060fdbc63d301e`).
 
 ### Controls
 
@@ -76,6 +76,8 @@ filigree frames with corner scrollwork, diamond tabs, parchment cards and teal
 | **Shop** | Merchant's alcove, purse, eight trinket cards with prices; tap to inspect, PURCHASE to confirm |
 | **Quests** | The live journal: Active / Main / Side / Done over the 190 authored quests, filtered to the settlement you are in, with objective, reward, level and progress |
 | **The Wander** | The spell book: 101 pages, four views, mastery to 30, the next stage and what it grants, and the four-slot action bar |
+| **The Forge** | Spell creation as dials -- element, shape, effect, range, area, power -- with the cost, damage, reach and cooldown updating live |
+| **Elaris** | The map: 14 settlements with level band, pages still hidden, which companion is waiting, and what the player will meet |
 | **Wardrobe** | Category rail, the character standing on a lit dais, four body tiles, a 4×4 skin-and-eye swatch grid, HAIR / LIPS / FACE chips and **EQUIP** |
 | **Settings** | Five roman-numeral set tabs, an in-panel vertical volume slider, AUDIO / HAPTICS / CAMERA SHAKE toggles, a difficulty dropdown and **RESET** |
 
@@ -103,9 +105,18 @@ four awake; the rest lie in the world waiting to be found, and every page levels
 to thirty along its own curve, gaining real mechanics -- a bolt that explodes, a
 ward that reflects, a field that pulls -- rather than only more damage.
 **190 quests** (25 main, 165 side) run across the settlements in a single
-unbroken chain. The blade has light, heavy, charged, counter and finishing
-attacks, a perfect dodge and a parry, and each region's boss changes the fight
-at every phase instead of only gaining health.
+unbroken chain. **The forge** makes spells out of dials rather than recipes --
+element, shape, effect, range, area, power -- and every one it makes is a real
+page with a mastery track to thirty. **Six companions** travel two at a time,
+each with a Gift, an ability gated on their trust in you, a personal quest and a
+combination they can teach; six of the fifteen pairs unlock a synergy.
+
+The blade has light, heavy, charged, counter and finishing attacks, a perfect
+dodge and a parry. Each region's boss changes the fight at every phase instead
+of only gaining health: a guard that only a committed blow breaks, an arena
+that attacks what stands still, and a weak point worth three and a half
+times a normal hit. Progress saves on every shard, at victory tried and on
+pause.
 
 Six star shards have fallen across a fragmented landscape guarded by **Wardens**.
 Collect all six before they overwhelm you. Every shard you recover pushes the
