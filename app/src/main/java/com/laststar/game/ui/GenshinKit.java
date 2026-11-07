@@ -138,8 +138,8 @@ public final class GenshinKit {
         };
         if (primary) {
             b.quadGradient(cx - w * 0.5f + nose, cy - h * 0.5f, w - nose * 2f, h,
-                    0.31f, 0.38f, 0.68f, 0.96f * alpha,
-                    0.12f, 0.18f, 0.42f, 0.98f * alpha);
+                    Style.SLATE_HI[0], Style.SLATE_HI[1], Style.SLATE_HI[2], 0.96f * alpha,
+                    Style.SLATE[0], Style.SLATE[1], Style.SLATE[2], 0.98f * alpha);
             // Gold remains the reward/action cue; cyan glints sell the glass.
             b.glow(cx, cy, w * 0.62f, 24, Style.TEAL[0], Style.TEAL[1],
                     Style.TEAL[2], (0.07f + press * 0.12f) * alpha);

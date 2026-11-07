@@ -9,6 +9,7 @@ import android.view.View;
 import com.laststar.game.audio.SoundFx;
 import com.laststar.game.core.Camera;
 import com.laststar.game.core.Noise;
+import com.laststar.game.gl.GlCapabilities;
 import com.laststar.game.gl.SceneRenderer;
 import com.laststar.game.ui.Hud;
 import com.laststar.game.ui.Menu;
@@ -29,8 +30,6 @@ import javax.microedition.khronos.opengles.GL10;
 public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     private static final float FIXED_STEP = 1f / 60f;
-    private static final int GLES20_RENDERER = 0x1F01;
-    private static final int GLES20_VERSION = 0x1F02;
 
     private final World world;
     private final Camera camera = new Camera();
@@ -138,10 +137,11 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-        // Report the driver's actual GL version in the log: "why is this device
-        // black" is almost always a GLES feature question.
-        android.util.Log.i("LastStar", "GL_RENDERER=" + android.opengl.GLES20.glGetString(GLES20_RENDERER)
-                + " GL_VERSION=" + android.opengl.GLES20.glGetString(GLES20_VERSION));
+        // Log an actual-context capability snapshot for device diagnostics. Do
+        // not select an ES3 renderer solely because the driver advertises it:
+        // this scene still uses the GLES2 client-array compatibility backend.
+        GlCapabilities glCaps = GlCapabilities.detectCurrentContext();
+        android.util.Log.i("LastStar", "GL capabilities: " + glCaps.summary());
 
         // Initialise in two halves. The world renderer failing is fatal, but the
         // UI renderer failing must not be: if only the UI is broken the player

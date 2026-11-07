@@ -15,6 +15,8 @@ import com.laststar.game.world.lore.Companions;
 import com.laststar.game.world.lore.Gear;
 import com.laststar.game.world.lore.Dialogue;
 import com.laststar.game.world.lore.SpellForge;
+import com.laststar.game.ui.Style;
+import com.laststar.game.gl.GlCapabilities;
 
 import java.io.IOException;
 import java.util.List;
@@ -53,11 +55,47 @@ public final class SystemsTest {
         companions();
         travel();
         equipment();
+        uiPalette();
+        glCapabilityParsing();
 
         System.out.println(checks + " checks, " + failures + " failures");
         if (failures > 0) {
             throw new AssertionError(failures + " failures");
         }
+    }
+
+    // -- visual identity ------------------------------------------------------
+
+    private static void uiPalette() {
+        check("brand indigo is #1E1E76", rgb(Style.SLATE, 0x1e, 0x1e, 0x76));
+        check("brand blue is #4B4BC3", rgb(Style.SLATE_HI, 0x4b, 0x4b, 0xc3));
+        check("active blue is #707FF5", rgb(Style.TEAL, 0x70, 0x7f, 0xf5));
+        check("magic violet is #A195F9", rgb(Style.VIOLET, 0xa1, 0x95, 0xf9));
+        check("magic pink is #F2A1F2", rgb(Style.PINK, 0xf2, 0xa1, 0xf2));
+        check("reward gold is #F7B769", rgb(Style.GOLD, 0xf7, 0xb7, 0x69));
+        check("primary text is #F5F0FF", rgb(Style.IVORY, 0xf5, 0xf0, 0xff));
+    }
+
+    private static void glCapabilityParsing() {
+        GlCapabilities es32 = GlCapabilities.fromStrings(
+                "OpenGL ES 3.2 V@0502", "Qualcomm", "Adreno (TM) 740", "");
+        GlCapabilities es2 = GlCapabilities.fromStrings(
+                "OpenGL ES 2.0 V@145", "ARM", "Mali-400", "GL_OES_standard_derivatives");
+        GlCapabilities unknown = GlCapabilities.fromStrings("not a GL version", "", "", "");
+        check("detects GLES 3.2 from vendor-formatted version", es32.api == GlCapabilities.Api.GLES3_2);
+        check("GLES 3.2 exposes core vertex arrays and instancing",
+                es32.supportsVertexArrays() && es32.supportsInstancing());
+        check("GLES2 extensions are used for optional features", es2.supportsDerivatives());
+        check("GLES2 does not claim core vertex arrays", !es2.supportsVertexArrays());
+        check("unknown GL strings fail closed", unknown.api == GlCapabilities.Api.UNKNOWN
+                && !unknown.hasVbo() && !unknown.supportsDepthTextures());
+    }
+
+    private static boolean rgb(float[] color, int r, int g, int b) {
+        return color != null && color.length >= 3
+                && Math.round(color[0] * 255f) == r
+                && Math.round(color[1] * 255f) == g
+                && Math.round(color[2] * 255f) == b;
     }
 
     // -- the book -------------------------------------------------------------
