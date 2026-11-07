@@ -28,7 +28,7 @@ repository**, no Unity, no Gradle, no Android Studio required.
 Works on **every Android device since Android 5.0 (API 21)** — 32-bit, 64-bit,
 ARM and x86. No permissions at all: no internet, no ads, no analytics, ~669 KiB.
 Signed with APK schemes v1 + v2 + v3
-(SHA-256 `3018e2db26414973891e3b67517272733fe6c254088cc45ead55fbf4896751cf`).
+(SHA-256 `e3a36439d048975689a3bad184c54e4accb20ee6721e774be1b4316a6f648c6c`).
 
 ### Controls
 
