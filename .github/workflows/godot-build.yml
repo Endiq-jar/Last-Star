@@ -77,6 +77,7 @@ jobs:
           test -n "$godot_bin"
           chmod +x "$godot_bin"
           ln -sf "$godot_bin" "$RUNNER_TEMP/godot/godot"
+          export PATH="$RUNNER_TEMP/godot:$PATH"
           echo "$RUNNER_TEMP/godot" >> "$GITHUB_PATH"
           mkdir -p "$RUNNER_TEMP/template-files"
           unzip -q "$RUNNER_TEMP/templates.tpz" -d "$RUNNER_TEMP/template-files"
