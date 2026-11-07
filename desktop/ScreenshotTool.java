@@ -244,8 +244,10 @@ public final class ScreenshotTool {
 
         // Terrain.
         MeshData terrain = Geometry.terrain(world.terrain);
+        raster.setTerrainSurface(true);
         raster.drawMesh(terrain.positions, terrain.normals, terrain.colors, terrain.indices,
                 identity, 1f, 0f, null, 0f);
+        raster.setTerrainSurface(false);
 
         // Water.
         MeshData water = Geometry.waterPlane(world.terrain.size * 1.4f, 44, world.terrain.waterLevel);

@@ -27,6 +27,7 @@ public final class Raster {
     private float fogDensity = 0.007f;
     private float near = 0.08f;
     private Vec3 camPos = Vec3.ZERO;
+    private boolean terrainSurface;
 
     /** Camera position in world space, used for distance fog. */
     public void setCameraPosition(Vec3 p) {
@@ -67,6 +68,10 @@ public final class Raster {
 
     public void setNear(float n) {
         near = n;
+    }
+
+    public void setTerrainSurface(boolean enabled) {
+        terrainSurface = enabled;
     }
 
     private float sunR = 1f;
@@ -495,6 +500,16 @@ public final class Raster {
     private float[] shadeToon(float cr, float cg, float cb,
                               float nx, float ny, float nz,
                               float wx, float wy, float wz) {
+        if (terrainSurface) {
+            float broad = noise2(wx * 0.10f, wz * 0.10f);
+            float clumps = noise2(wx * 0.42f, wz * 0.42f);
+            float grain = noise2(wx * 1.75f, wz * 1.75f);
+            float tone = (broad - 0.5f) * 0.20f + (clumps - 0.5f) * 0.10f
+                    + (grain - 0.5f) * 0.035f;
+            cr *= 1f + tone;
+            cg = cg * (1f + tone) + (clumps - 0.5f) * 0.025f;
+            cb *= 1f + tone;
+        }
         float ndl = Math.max(0f, nx * sun[0] + ny * sun[1] + nz * sun[2]);
         float mid = band(ndl, 0.24f);
         float lit = band(ndl, 0.58f);
@@ -689,6 +704,23 @@ public final class Raster {
      * Hard step with a 1.5% edge, matching {@code band()} in the scene shader:
      * flat zones with a crisp terminator between them.
      */
+    private static float noise2(float x, float y) {
+        int ix = (int) Math.floor(x), iy = (int) Math.floor(y);
+        float fx = x - ix, fy = y - iy;
+        fx = fx * fx * (3f - 2f * fx);
+        fy = fy * fy * (3f - 2f * fy);
+        int x0 = Math.floorMod(ix, 96), x1 = (x0 + 1) % 96;
+        int y0 = Math.floorMod(iy, 96), y1 = (y0 + 1) % 96;
+        float a = hashGrid(x0, y0), b = hashGrid(x1, y0);
+        float c = hashGrid(x0, y1), d = hashGrid(x1, y1);
+        return lerp(lerp(a, b, fx), lerp(c, d, fx), fy);
+    }
+
+    private static float hashGrid(int x, int y) {
+        double n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+        return (float) (n - Math.floor(n));
+    }
+
     private static float band(float x, float edge) {
         float t = (x - (edge - 0.025f)) / 0.05f;
         t = clamp01(t);

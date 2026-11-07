@@ -307,7 +307,9 @@ public final class SceneRenderer {
         sceneProgram.setTintAmount(0f);
         sceneProgram.setTime(time);
         sceneProgram.setFloat("uWaveAmp", 0f);
+        sceneProgram.setFloat("uTerrainSurface", 1f);
         for (Mesh mesh : terrainMeshes.values()) drawMesh(mesh);
+        sceneProgram.setFloat("uTerrainSurface", 0f);
         if (world.inHollow) {
             modelMatrix.identity();
             mvp.setMultiply(proj, view);
