@@ -5,8 +5,8 @@ repository**, no Unity, no Gradle, no Android Studio required.
 
 [![APK](https://img.shields.io/badge/APK-last--star--1.0.0.apk-2ea44f)](apk/last-star-1.0.0.apk)
 [![minSdk](https://img.shields.io/badge/minSdk-21%20(Android%205.0)-blue)]()
-[![size](https://img.shields.io/badge/size-462%20KiB-informational)]()
-[![tests](https://img.shields.io/badge/headless%20checks-13%2C578%20passing-brightgreen)]()
+[![size](https://img.shields.io/badge/size-733%20KiB-informational)]()
+[![tests](https://img.shields.io/badge/headless%20checks-13%2C613%20passing-brightgreen)]()
 [![licence](https://img.shields.io/badge/licence-EPL--2.0-lightgrey)](LICENSE)
 
 ![Last Star gameplay](docs/screenshots/02-gameplay.png)
@@ -28,7 +28,7 @@ repository**, no Unity, no Gradle, no Android Studio required.
 Works on **every Android device since Android 5.0 (API 21)** — 32-bit, 64-bit,
 ARM and x86. No permissions at all: no internet, no ads, no analytics, ~733 KiB.
 Signed with APK schemes v1 + v2 + v3
-(SHA-256 `c8df9c6f32f21bdb83bced324611950c9ed0523c17215c1d5d20b01834894703`).
+(SHA-256 `47b3ee45e23443221b56242e74840742e783a7cc5a82208181759ddf4960ff71`).
 
 ### Controls
 
@@ -65,9 +65,10 @@ found — that is the point of it.
 ### The interface
 
 The game opens on a painted title screen and the whole shell is a hand-built
-fantasy UI: midnight-navy vistas, ivory letter-spaced serif capitals, gold
-filigree frames with corner scrollwork, diamond tabs, parchment cards and teal
-"on" accents. Six pages, all reachable from the bottom bar:
+fantasy UI retuned to deep indigo glass, cool-white letter-spaced type, violet
+magic accents, cyan focus states and warm gold reward buttons. Panels use a
+frosted blue-violet surface with fine gold trim, inspired by the attached
+fantasy-RPG reference while retaining Last Star's own icons and identity.
 
 | Page | What it does |
 |---|---|
@@ -78,8 +79,15 @@ filigree frames with corner scrollwork, diamond tabs, parchment cards and teal
 | **The Wander** | The spell book: 101 pages, four views, mastery to 30, the next stage and what it grants, and the four-slot action bar |
 | **The Forge** | Spell creation as dials -- element, shape, effect, range, area, power -- with the cost, damage, reach and cooldown updating live |
 | **Elaris** | The map: 14 settlements with level band, pages still hidden, which companion is waiting, and what the player will meet |
+| **Company** | Six companions, their Gift and bond, party slots, five relationship stages of conversation and trust-changing choices |
+| **Equipment** | Twelve real Gear pieces across blade, cloak and relic slots; bought from Shop, equipped, removed, saved and applied to combat/Light/health |
 | **Wardrobe** | Category rail, the character standing on a lit dais, four body tiles, a 4×4 skin-and-eye swatch grid, HAIR / LIPS / FACE chips and **EQUIP** |
 | **Settings** | Five roman-numeral set tabs, an in-panel vertical volume slider, AUDIO / HAPTICS / CAMERA SHAKE toggles, a difficulty dropdown and **RESET** |
+
+The map includes Evergloom's rift to **The Hollow Depths**, a separate underground
+arena with its own purple-black terrain, mineral-seamed cavern roof, cave props,
+creatures and boss. The map is also the route back out. Saves preserve whether
+you are inside. Travel rebuilds the actual terrain, skyline and prop plan.
 
 Everything on those pages is live: the difficulty changes your starting health
 (140 / 100 / 80), the wardrobe swatch recolours the character's head in-game, and
@@ -88,9 +96,12 @@ the volume, toggles, name and page choices persist across launches.
 ![Home](docs/ui/screens/home.png)
 ![Wardrobe](docs/ui/screens/wardrobe.png)
 ![Quests](docs/ui/screens/quests.png)
+![The Hollow Depths map entry](docs/ui/screens/travel-hollow.png)
 
 **No UI toolkit, no fonts, no drawables.** Every screen is batched triangles
-(`UiBatch`) drawn in one GL call. The typeface is `VectorFont`: a Trajan-style
+(`UiBatch`) drawn in one GL call. Scene prop culling is sampled in headless tests:
+the current worst sampled region view is **842 of a 900 prop-draw budget**, and
+the renderer exposes the completed frame's mesh draw-call count for profiling. The typeface is `VectorFont`: a Trajan-style
 serif described as strokes in source, scan-converted at start-up into a signed
 distance-field atlas (320×322 bytes, ~20 ms on a desktop JVM), so 8-pixel
 small-caps stay crisp at any scale without shipping a TTF. Backdrops

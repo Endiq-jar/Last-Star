@@ -1260,6 +1260,26 @@ public final class SystemsTest {
         check("the player lands on dry ground",
                 world.player.position.y > world.terrain.waterLevel);
 
+        // The Hollow is a separate traversable 3D field, not just a journal
+        // label or a boss name on the Evergloom region card.
+        World hollow = new World(1188L);
+        check("the Hollow gate is closed outside Evergloom", !hollow.enterHollow());
+        hollow.enterRegion(12);
+        check("Evergloom opens the Hollow gate", hollow.enterHollow());
+        check("the player is in a separate Hollow terrain", hollow.inHollow
+                && hollow.region() == Elaris.HOLLOW_DEPTHS
+                && hollow.terrain.region == Elaris.HOLLOW_DEPTHS);
+        check("the Hollow rebuilds an explorable encounter", hollow.bossSpawn != null
+                && hollow.enemies.size() >= 5 && hollow.shards.size() == World.SHARD_COUNT);
+        SaveGame hollowSave = SaveGame.capture(hollow);
+        World hollowLoad = new World(1188L);
+        hollowSave.applyTo(hollowLoad);
+        check("save restores an in-progress Hollow", hollowLoad.inHollow
+                && hollowLoad.region() == Elaris.HOLLOW_DEPTHS);
+        check("the Hollow exit returns to Evergloom", hollow.leaveHollow()
+                && !hollow.inHollow && hollow.regionIndex == 12
+                && hollow.region() == Elaris.regions()[12]);
+
         boolean namedCreature = false;
         for (int i = 0; i < world.enemies.size(); i++) {
             Enemy e = world.enemies.get(i);

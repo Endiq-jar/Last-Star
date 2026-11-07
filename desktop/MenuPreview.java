@@ -39,6 +39,7 @@ public final class MenuPreview {
         shoot(outDir, w, h, "spells-all", Menu.Page.SPELLS, "all");
         shoot(outDir, w, h, "forge", Menu.Page.FORGE, null);
         shoot(outDir, w, h, "travel", Menu.Page.TRAVEL, null);
+        shoot(outDir, w, h, "travel-hollow", Menu.Page.TRAVEL, "hollow");
         shoot(outDir, w, h, "company", Menu.Page.COMPANY, null);
         shoot(outDir, w, h, "company-talk", Menu.Page.COMPANY, "talk");
         shoot(outDir, w, h, "company-met", Menu.Page.COMPANY, "met");
@@ -94,6 +95,11 @@ public final class MenuPreview {
             for (int i = 0; i < 10; i++) {
                 menu.update(1f / 60f);
             }
+        } else if ("hollow".equals(variant)) {
+            previewWorld.enterRegion(12);
+            menu.travel.selected = 14;
+            menu.travel.scroll = 10;
+            menu.travel.update(1f / 60f);
         } else if ("met".equals(variant)) {
             menu.company.selected = 1;
             menu.company.update(1f / 60f);

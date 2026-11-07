@@ -15,31 +15,31 @@ public final class Style {
     // ------------------------------------------------------------- palette
 
     /** Ivory lettering for headings and primary labels. */
-    public static final float[] IVORY = {0.949f, 0.906f, 0.816f};
-    /** Slightly dimmed cream for body copy. */
-    public static final float[] CREAM = {0.855f, 0.804f, 0.690f};
-    /** Muted cream for secondary text. */
-    public static final float[] CREAM_DIM = {0.639f, 0.600f, 0.518f};
-    /** Deep warm gold. */
-    public static final float[] GOLD = {0.788f, 0.635f, 0.153f};
-    /** Bright gold highlight for edges and glows. */
-    public static final float[] GOLD_LIGHT = {0.910f, 0.784f, 0.478f};
+    public static final float[] IVORY = {0.945f, 0.953f, 1.000f};
+    /** Cool, bright copy for the blue-violet glass panels. */
+    public static final float[] CREAM = {0.805f, 0.843f, 0.949f};
+    /** Muted periwinkle for secondary text. */
+    public static final float[] CREAM_DIM = {0.541f, 0.612f, 0.780f};
+    /** Warm gold for rewards and primary actions. */
+    public static final float[] GOLD = {0.914f, 0.678f, 0.294f};
+    /** Bright champagne-gold highlight. */
+    public static final float[] GOLD_LIGHT = {1.000f, 0.827f, 0.482f};
     /** Pale gold for thin inner lines. */
-    public static final float[] GOLD_PALE = {0.965f, 0.878f, 0.659f};
-    /** Midnight panel fill. */
-    public static final float[] SLATE = {0.106f, 0.122f, 0.165f};
-    /** Slightly lifted panel. */
-    public static final float[] SLATE_HI = {0.149f, 0.169f, 0.220f};
-    /** Parchment for cards and dropdowns. */
-    public static final float[] PARCHMENT = {0.910f, 0.851f, 0.710f};
-    /** Darker parchment shading. */
-    public static final float[] PARCHMENT_DK = {0.804f, 0.729f, 0.573f};
-    /** Ink used on parchment. */
-    public static final float[] INK = {0.165f, 0.129f, 0.094f};
-    /** Teal accent for "on"/active states. */
-    public static final float[] TEAL = {0.435f, 0.835f, 0.784f};
-    /** Violet used sparingly in shadows. */
-    public static final float[] VIOLET = {0.486f, 0.416f, 0.682f};
+    public static final float[] GOLD_PALE = {1.000f, 0.906f, 0.690f};
+    /** Deep blue-violet glass panel. */
+    public static final float[] SLATE = {0.035f, 0.047f, 0.125f};
+    /** Lifted indigo panel for selected rows. */
+    public static final float[] SLATE_HI = {0.110f, 0.137f, 0.282f};
+    /** Frosted indigo surface used for cards and dropdowns. */
+    public static final float[] PARCHMENT = {0.118f, 0.145f, 0.290f};
+    /** Lower blue-violet edge of frosted surfaces. */
+    public static final float[] PARCHMENT_DK = {0.071f, 0.090f, 0.208f};
+    /** Cool white lettering on the blue glass cards. */
+    public static final float[] INK = {0.902f, 0.929f, 1.000f};
+    /** Cyan for active states, magic and navigation focus. */
+    public static final float[] TEAL = {0.400f, 0.835f, 1.000f};
+    /** Violet accent for magic and companion affinity. */
+    public static final float[] VIOLET = {0.651f, 0.471f, 1.000f};
 
     // ------------------------------------------------------------- metrics
 

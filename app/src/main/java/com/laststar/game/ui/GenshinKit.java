@@ -125,7 +125,9 @@ public final class GenshinKit {
      */
     public static void lozenge(UiBatch b, float cx, float cy, float w, float h,
                                boolean primary, float press, float alpha) {
-        float nose = h * 0.5f;
+        // Contemporary rounded-glass CTA rather than a sharp heraldic lozenge:
+        // the short chamfer keeps the fantasy trim while matching pill buttons.
+        float nose = h * 0.16f;
         float[] shape = {
                 cx - w * 0.5f + nose, cy - h * 0.5f,
                 cx + w * 0.5f - nose, cy - h * 0.5f,
@@ -135,19 +137,20 @@ public final class GenshinKit {
                 cx - w * 0.5f, cy
         };
         if (primary) {
-            float[] g = Style.GOLD;
-            b.polygon(shape, g[0] * 0.30f, g[1] * 0.26f, g[2] * 0.10f, 0.92f * alpha);
-            // Gold glow behind.
-            b.glow(cx, cy, w * 0.62f, 24, Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1],
-                    Style.GOLD_LIGHT[2], (0.12f + press * 0.16f) * alpha);
+            b.quadGradient(cx - w * 0.5f + nose, cy - h * 0.5f, w - nose * 2f, h,
+                    0.31f, 0.38f, 0.68f, 0.96f * alpha,
+                    0.12f, 0.18f, 0.42f, 0.98f * alpha);
+            // Gold remains the reward/action cue; cyan glints sell the glass.
+            b.glow(cx, cy, w * 0.62f, 24, Style.TEAL[0], Style.TEAL[1],
+                    Style.TEAL[2], (0.07f + press * 0.12f) * alpha);
         } else {
-            b.polygon(shape, 0.05f, 0.06f, 0.09f, (0.72f + press * 0.18f) * alpha);
+            b.polygon(shape, 0.055f, 0.075f, 0.18f, (0.78f + press * 0.16f) * alpha);
         }
-        // Double border.
+        // Fine gold outer rim and a restrained blue-white inner glint.
         float[] g = Style.GOLD_LIGHT;
-        strokePolygon(b, shape, 2.2f, g[0], g[1], g[2], alpha);
-        float[] inner = inset(shape, cx, cy, 4.5f);
-        strokePolygon(b, inner, 1.2f, g[0], g[1], g[2], alpha * 0.75f);
+        strokePolygon(b, shape, 1.7f, g[0], g[1], g[2], alpha);
+        float[] inner = inset(shape, cx, cy, 3.2f);
+        strokePolygon(b, inner, 0.8f, Style.TEAL[0], Style.TEAL[1], Style.TEAL[2], alpha * 0.62f);
         // End diamonds.
         diamond(b, cx - w * 0.5f + nose * 0.5f, cy, 3.6f, g[0], g[1], g[2], alpha);
         diamond(b, cx + w * 0.5f - nose * 0.5f, cy, 3.6f, g[0], g[1], g[2], alpha);

@@ -51,11 +51,11 @@ public final class Backdrop {
     private void drawCitadel(UiBatch b, float w, float h, float a) {
         // Sky: deep navy at the top, teal towards the horizon, warm amber low left.
         b.quadGradient(0f, 0f, w, h * 0.62f,
-                0.043f, 0.063f, 0.114f, a,
-                0.086f, 0.129f, 0.196f, a);
+                0.035f, 0.047f, 0.145f, a,
+                0.105f, 0.125f, 0.335f, a);
         b.quadGradient(0f, h * 0.62f, w, h * 0.38f,
-                0.086f, 0.129f, 0.196f, a,
-                0.129f, 0.169f, 0.208f, a);
+                0.105f, 0.125f, 0.335f, a,
+                0.185f, 0.180f, 0.365f, a);
 
         // Warm horizon bloom on the left.
         b.glow(w * 0.18f, h * 0.66f, w * 0.45f, 30,

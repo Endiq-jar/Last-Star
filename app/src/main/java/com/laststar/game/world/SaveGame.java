@@ -28,11 +28,12 @@ import java.io.IOException;
 public final class SaveGame {
 
     /** Bumped whenever the layout changes, so an old save is rejected cleanly. */
-    public static final int VERSION = 2;
+    public static final int VERSION = 3;
     private static final int MAGIC = 0x4C535356;   // "LSSV"
 
     // --- what is saved -------------------------------------------------------
     public int region;
+    public boolean inHollow;
     public int gold;
     public int level;
     public int kills;
@@ -67,6 +68,7 @@ public final class SaveGame {
     public static SaveGame capture(World world) {
         SaveGame s = new SaveGame();
         s.region = world.regionIndex;
+        s.inHollow = world.inHollow;
         s.gold = world.gold;
         s.level = world.level();
         s.kills = world.kills;
@@ -125,6 +127,7 @@ public final class SaveGame {
             out.writeInt(deaths);
             out.writeInt(shardsCollected);
             out.writeInt(runsCompleted);
+            out.writeBoolean(inHollow);
             out.writeFloat(lightCapacity);
             out.writeFloat(playerX);
             out.writeFloat(playerY);
@@ -180,8 +183,8 @@ public final class SaveGame {
             throw new IOException("not a Last Star save");
         }
         int version = in.readInt();
-        if (version != VERSION) {
-            throw new IOException("save version " + version + ", expected " + VERSION);
+        if (version != 2 && version != VERSION) {
+            throw new IOException("save version " + version + ", expected 2 or " + VERSION);
         }
         SaveGame s = new SaveGame();
         s.region = in.readInt();
@@ -191,6 +194,7 @@ public final class SaveGame {
         s.deaths = in.readInt();
         s.shardsCollected = in.readInt();
         s.runsCompleted = in.readInt();
+        s.inHollow = version >= 3 && in.readBoolean();
         s.lightCapacity = in.readFloat();
         s.playerX = in.readFloat();
         s.playerY = in.readFloat();
@@ -253,6 +257,9 @@ public final class SaveGame {
     public void applyTo(World world) {
         if (region != world.regionIndex) {
             world.enterRegion(region);
+        }
+        if (inHollow && !world.inHollow) {
+            world.enterHollow();
         }
         world.gold = gold;
         world.kills = kills;

@@ -324,6 +324,45 @@ public final class HeadlessTest {
         // culls individual instances, so what matters is the total population.
         check(planner.count() < 60000,
                 "world stays inside its prop budget (" + planner.count() + ")");
+
+        // Measure the expensive thing, not just total content: every visible
+        // prop is a separate indexed draw. Sample a camera grid around the
+        // start and the later Evergloom region, where the 13-page population,
+        // Hollow boss and its minions all coexist with the heaviest scenery.
+        int worst = 0;
+        for (int z = -80; z <= 80; z += 20) {
+            for (int x = -80; x <= 80; x += 20) {
+                worst = Math.max(worst, planner.visibleDrawCount(x, z));
+            }
+        }
+        World hollowStress = new World(20261105L);
+        hollowStress.enterRegion(12);
+        PropPlanner hollowProps = new PropPlanner(models, hollowStress.terrain, 20261105L);
+        for (int z = -80; z <= 80; z += 20) {
+            for (int x = -80; x <= 80; x += 20) {
+                worst = Math.max(worst, hollowProps.visibleDrawCount(x, z));
+            }
+        }
+        System.out.println("  prop draw-call sample worst=" + worst + " / 900");
+        if (worst >= 900) {
+            int[] roles = {ModelLibrary.TREE, ModelLibrary.ROCK, ModelLibrary.PLANT,
+                    ModelLibrary.GRASS, ModelLibrary.FLOWER, ModelLibrary.MUSHROOM,
+                    ModelLibrary.LOG, ModelLibrary.STUMP, ModelLibrary.CLIFF, ModelLibrary.HILL};
+            for (int role : roles) {
+                System.out.println("  draws role " + role + " at center="
+                        + planner.visibleDrawCountForRole(0f, 0f, role));
+            }
+        }
+        check(worst < 900,
+                "prop culling keeps sampled worst-case under 900 draw calls (" + worst + ")");
+        check(hollowStress.lostPages.size() >= 10 && hollowStress.bossSpawn != null,
+                "the stress region has its full page population and a boss");
+        hollowStress.enterHollow();
+        PropPlanner cavernProps = new PropPlanner(models, hollowStress.terrain, 20261105L);
+        check(cavernProps.countNamed("pk_tree") == 0
+                        && cavernProps.visibleDrawCount(0f, 0f) < 500,
+                "Hollow uses a sparse cave dressing within 500 visible prop draws ("
+                        + cavernProps.visibleDrawCount(0f, 0f) + ")");
     }
 
     /** Instances that sit well above their own footprint, i.e. stacked spires. */

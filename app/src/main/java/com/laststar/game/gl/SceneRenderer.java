@@ -44,6 +44,9 @@ public final class SceneRenderer {
     private GlProgram skyProgram;
 
     private Mesh terrainMesh;
+    private Mesh hollowCeilingMesh;
+    /** Identity guard for rebuilding terrain and its scatter plan after travel. */
+    private com.laststar.game.core.Terrain terrainRef;
     private Mesh waterMesh;
     /** Ground fan beyond the playable map, under the mountain ring. */
     private Mesh skirtMesh;
@@ -81,6 +84,9 @@ public final class SceneRenderer {
     private int skyVertexCount;
 
     private float time;
+    /** Mesh draw calls from the most recently completed frame (not UI batches). */
+    public int lastFrameDrawCalls;
+    private int frameDrawCalls;
 
     /** Non-null when start-up degraded; surfaced on screen by the surface. */
     public String lastError;
@@ -89,7 +95,9 @@ public final class SceneRenderer {
         sceneProgram = GlProgram.create(Shaders.SCENE_VERT, Shaders.SCENE_FRAG);
         skyProgram = GlProgram.create(Shaders.SKY_VERT, Shaders.SKY_FRAG);
 
+        terrainRef = world.terrain;
         terrainMesh = toMesh(Geometry.terrain(world.terrain));
+        hollowCeilingMesh = toMesh(Geometry.hollowCeiling(220f, 35f, 40));
         waterMesh = toMesh(Geometry.waterPlane(world.terrain.size * 1.4f, 44, world.terrain.waterLevel));
         // Starts inside the terrain so there is no crack at the seam, and runs
         // out past the near mountain ring so its feet land on ground.
@@ -132,6 +140,27 @@ public final class SceneRenderer {
         }
 
         buildSkyQuad();
+    }
+
+    /** Rebuild the real ground mesh and environment when travel swaps terrain. */
+    private void ensureRegionMeshes(World world) {
+        if (terrainRef == world.terrain) {
+            return;
+        }
+        terrainRef = world.terrain;
+        terrainMesh = toMesh(Geometry.terrain(world.terrain));
+        waterMesh = toMesh(Geometry.waterPlane(world.terrain.size * 1.4f, 44,
+                world.terrain.waterLevel));
+        skirtMesh = toMesh(Geometry.distantGround(
+                world.terrain.size * 0.48f, 620f, 64,
+                world.terrain.heightAt(world.terrain.size * 0.48f, 0f) - 0.6f,
+                26f, 0.30f, 0.40f, 0.32f));
+        mountainMesh = toMesh(Geometry.layeredRange(520f, 96f, 56,
+                world.worldSeed ^ 0x5A5A5A5AL ^ world.regionIndex, 230f));
+        if (models != null) {
+            props = new PropPlanner(models, world.terrain,
+                    ((long) world.worldSeed << 12) ^ world.regionIndex * 7919L);
+        }
     }
 
     /**
@@ -194,6 +223,8 @@ public final class SceneRenderer {
     // ------------------------------------------------------------------ frame
 
     public void draw(World world, Camera camera, float aspect, float dt, float nightAmount) {
+        ensureRegionMeshes(world);
+        frameDrawCalls = 0;
         time += dt;
         updateSky(world, camera, nightAmount);
 
@@ -229,6 +260,16 @@ public final class SceneRenderer {
         sceneProgram.setTime(time);
         sceneProgram.setFloat("uWaveAmp", 0f);
         drawMesh(terrainMesh);
+        if (world.inHollow) {
+            modelMatrix.identity();
+            mvp.setMultiply(proj, view);
+            sceneProgram.setMvp(mvp.m);
+            sceneProgram.setModel(modelMatrix.m);
+            sceneProgram.setEmissive(0.18f);
+            sceneProgram.setTintAmount(0f);
+            drawMesh(hollowCeilingMesh);
+            sceneProgram.setEmissive(0f);
+        }
 
         drawSkirt(camera);
         drawMountains(camera);
@@ -245,6 +286,7 @@ public final class SceneRenderer {
         drawParticles(world, camera);
 
         GLES20.glDisable(GLES20.GL_DEPTH_TEST);
+        lastFrameDrawCalls = frameDrawCalls;
     }
 
     /**
@@ -369,27 +411,29 @@ public final class SceneRenderer {
                 // pixels, and the terrain's own meadow colour is already under
                 // it. Culling here is what keeps the draw count in the low
                 // thousands while the ground is still carpeted where it counts.
-                return 14f;
+                return 10f;
             case ModelLibrary.FLOWER:
-                return 20f;
+                return 10f;
             case ModelLibrary.MUSHROOM:
-                return 30f;
+                return 22f;
             case ModelLibrary.PLANT:
-                return 55f;
+                return 35f;
             case ModelLibrary.ROCK:
-                return 90f;
+                return 36f;
             case ModelLibrary.TREE:
+                return 70f;
             case ModelLibrary.LOG:
+                return 60f;
             case ModelLibrary.STUMP:
-                return 135f;
+                return 45f;
             case ModelLibrary.HILL:
                 // The mountain rings sit out past 400 m; the far plane is at
                 // 1400 m, so this is what keeps the whole horizon drawn.
                 return 900f;
             case ModelLibrary.CLIFF:
-                return 200f;
+                return 65f;
             default:
-                return 160f;
+                return 120f;
         }
     }
 
@@ -636,6 +680,7 @@ public final class SceneRenderer {
             return;
         }
         sceneProgram.bindMesh(mesh);
+        frameDrawCalls++;
         mesh.draw();
         sceneProgram.unbindMesh(mesh);
     }
@@ -721,6 +766,13 @@ public final class SceneRenderer {
         sky.ambientG = Noise.lerp(0.52f, 0.12f, night);
         sky.ambientB = Noise.lerp(0.68f, 0.24f, night);
         sky.fogDensity = Noise.lerp(0.0007f, 0.0016f, night);
+        if (world.inHollow) {
+            sky.horizonR = 0.075f; sky.horizonG = 0.055f; sky.horizonB = 0.16f;
+            sky.zenithR = 0.018f; sky.zenithG = 0.012f; sky.zenithB = 0.055f;
+            sky.sunR = 0.46f; sky.sunG = 0.34f; sky.sunB = 0.95f;
+            sky.ambientR = 0.12f; sky.ambientG = 0.09f; sky.ambientB = 0.28f;
+            sky.fogDensity = 0.0030f;
+        }
         sunPitch = Noise.lerp(34f, 12f, night);
         sunYaw = 42f + world.worldTime * 0.35f;
     }

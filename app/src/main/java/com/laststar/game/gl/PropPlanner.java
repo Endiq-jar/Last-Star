@@ -140,6 +140,17 @@ public final class PropPlanner {
         grid = new Grid(terrain.size / cols, -terrain.size * 0.5f, -terrain.size * 0.5f,
                 cols, cols);
 
+        // The Depths are not another outdoor biome: no skyline peaks, trees or
+        // flower cards. Their ceiling is built separately; these cave props
+        // give the traversable floor sparse rock, fungus and broken columns.
+        if (terrain.region != null && terrain.region.index == 14) {
+            scatter(models, terrain, seed + 7, ModelLibrary.ROCK, 300, 4.2f, 8f, true);
+            scatter(models, terrain, seed + 13, ModelLibrary.MUSHROOM, 240, 3.0f, 7f, true);
+            scatter(models, terrain, seed + 19, ModelLibrary.PLANT, 150, 3.8f, 9f, true);
+            scatter(models, terrain, seed + 29, ModelLibrary.CLIFF, 70, 12f, 22f, false);
+            return;
+        }
+
         // Order is load-bearing, not cosmetic: the grid doubles as the overlap
         // test, so whatever goes in first wins its ground. Landmarks and the
         // big silhouettes are placed before the ground cover, and the ground
@@ -567,6 +578,20 @@ public final class PropPlanner {
         for (int i = 0; i < attempts; i++) {
             float x = (r.nextFloat() * 2f - 1f) * half;
             float z = (r.nextFloat() * 2f - 1f) * half;
+            // Meadow flowers grow in drifts rather than evenly spaced confetti.
+            // Eight deterministic beds surround the starting clearing; a soft
+            // Gaussian-like scatter lets each edge dissolve into plain grass.
+            if (role == ModelLibrary.FLOWER) {
+                int bed = i % 8;
+                float angle = (float) (bed * Math.PI * 0.25) + 0.23f;
+                float radius = 30f + (bed % 3) * 8f;
+                float jx = (r.nextFloat() + r.nextFloat() + r.nextFloat()
+                        + r.nextFloat() - 2f) * 5.2f;
+                float jz = (r.nextFloat() + r.nextFloat() + r.nextFloat()
+                        + r.nextFloat() - 2f) * 5.2f;
+                x = (float) Math.cos(angle) * radius + jx;
+                z = (float) Math.sin(angle) * radius + jz;
+            }
             float h = terrain.heightAt(x, z);
             if (h < terrain.waterLevel + 0.55f) {
                 continue;
@@ -594,8 +619,10 @@ public final class PropPlanner {
             if (blocked(x, z, minGap)) {
                 continue;
             }
+            boolean hollow = terrain.region != null && terrain.region.index == 14;
             grid.add(new Instance(index, x, h - 0.04f, z, r.nextFloat() * 360f, scale,
-                    0f, 0f, 0f, 0f));
+                    hollow ? 0.72f : 0f, hollow ? 0.54f : 0f, hollow ? 1f : 0f,
+                    hollow ? 0.32f : 0f));
         }
     }
 
@@ -1004,6 +1031,67 @@ public final class PropPlanner {
         }
         Integer found = nameToIndex.get(modelName);
         return found == null ? -1 : found.intValue();
+    }
+
+    /**
+     * Number of prop draws the camera would submit from this position. Each
+     * visible prop is one indexed mesh draw; this mirrors SceneRenderer's
+     * distance cull and lets the content tests enforce a per-frame budget.
+     */
+    public int visibleDrawCount(float x, float z) {
+        int n = 0;
+        for (int i = 0; i < landmarks.size(); i++) {
+            Instance in = landmarks.get(i);
+            float radius = Math.max(300f, visibleRadius(in.model));
+            if (in.near(x, z, radius)) {
+                n++;
+            }
+        }
+        for (int cz = 0; cz < grid.rows(); cz++) {
+            for (int cx = 0; cx < grid.cols(); cx++) {
+                List<Instance> cell = grid.cell(cx, cz);
+                for (int i = 0; i < cell.size(); i++) {
+                    Instance in = cell.get(i);
+                    if (in.near(x, z, visibleRadius(in.model))) {
+                        n++;
+                    }
+                }
+            }
+        }
+        return n;
+    }
+
+    public int visibleDrawCountForRole(float x, float z, int role) {
+        int n = 0;
+        for (int cz = 0; cz < grid.rows(); cz++) {
+            for (int cx = 0; cx < grid.cols(); cx++) {
+                List<Instance> cell = grid.cell(cx, cz);
+                for (int i = 0; i < cell.size(); i++) {
+                    Instance in = cell.get(i);
+                    if (library.get(in.model).role == role
+                            && in.near(x, z, visibleRadius(in.model))) {
+                        n++;
+                    }
+                }
+            }
+        }
+        return n;
+    }
+
+    private float visibleRadius(int model) {
+        switch (library.get(model).role) {
+            case ModelLibrary.GRASS: return 10f;
+            case ModelLibrary.FLOWER: return 10f;
+            case ModelLibrary.MUSHROOM: return 22f;
+            case ModelLibrary.PLANT: return 35f;
+            case ModelLibrary.ROCK: return 36f;
+            case ModelLibrary.TREE: return 70f;
+            case ModelLibrary.LOG: return 60f;
+            case ModelLibrary.STUMP: return 45f;
+            case ModelLibrary.HILL: return 850f;
+            case ModelLibrary.CLIFF: return 65f;
+            default: return 120f;
+        }
     }
 
     public int count() {

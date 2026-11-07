@@ -82,8 +82,9 @@ public final class TravelScreen implements Screen {
     }
 
     private void clampScroll() {
-        scroll = Math.max(0, Math.min(scroll, Math.max(0, Elaris.REGION_COUNT - ROWS)));
-        selected = Math.max(0, Math.min(selected, Elaris.REGION_COUNT - 1));
+        int destinations = Elaris.REGION_COUNT + 1;
+        scroll = Math.max(0, Math.min(scroll, Math.max(0, destinations - ROWS)));
+        selected = Math.max(0, Math.min(selected, destinations - 1));
     }
 
     // ------------------------------------------------------------ geometry
@@ -112,13 +113,15 @@ public final class TravelScreen implements Screen {
         float lw = w * 0.325f;
         for (int r = 0; r < ROWS; r++) {
             int i = scroll + r;
-            if (i >= Elaris.REGION_COUNT) {
+            if (i >= Elaris.REGION_COUNT + 1) {
                 break;
             }
-            Elaris.Region region = Elaris.regions()[i];
+            boolean hollow = i == Elaris.REGION_COUNT;
+            Elaris.Region region = hollow ? Elaris.HOLLOW_DEPTHS : Elaris.regions()[i];
             float y = ry + r * rowStep();
             boolean on = i == selected;
-            boolean here = world != null && world.regionIndex == i;
+            boolean here = hollow ? world != null && world.inHollow
+                    : world != null && world.regionIndex == i;
 
             if (on) {
                 b.quadGradient(rx, y, lw, 28f,
@@ -149,11 +152,14 @@ public final class TravelScreen implements Screen {
                     alpha * 0.85f, font);
 
             // What is there: pages, a companion, or the word for being here.
-            int pages = pagesWaiting(i);
-            int friend = companionWaiting(i);
+            int pages = hollow ? -1 : pagesWaiting(i);
+            int friend = hollow ? -1 : companionWaiting(i);
             String note;
             if (here) {
                 note = "YOU ARE HERE";
+            } else if (hollow) {
+                note = world != null && world.regionIndex == 12
+                        ? "RIFT OPEN IN EVERGLOOM" : "ENTER THROUGH EVERGLOOM";
             } else if (friend >= 0) {
                 note = Companions.get(friend).name + " IS HERE";
             } else if (pages > 0) {
@@ -170,15 +176,14 @@ public final class TravelScreen implements Screen {
 
         drawDetail(b, font, alpha, w, h);
 
-        // A pair of figures on the far control, since it now opens the company.
-        b.circle(w - 33f, 23f, 3.2f, 10, 1f, 0.92f, 0.70f, alpha);
-        b.circle(w - 27f, 23f, 3.2f, 10, 1f, 0.92f, 0.70f, alpha * 0.8f);
-        b.quad(w - 37f, 27f, 14f, 3f, 1f, 0.92f, 0.70f, alpha * 0.85f);
+        // The companion glyph is a clear entry point to the party screen.
         GenshinKit.roundButton(b, w - 30f, 26f, 15f, 0f, alpha);
-        b.line(w - 35f, 21f, w - 25f, 31f, 2.2f, Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1],
+        b.circle(w - 33.5f, 22f, 3.2f, 10, Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1],
                 Style.GOLD_LIGHT[2], alpha);
-        b.line(w - 25f, 21f, w - 35f, 31f, 2.2f, Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1],
-                Style.GOLD_LIGHT[2], alpha);
+        b.circle(w - 26.5f, 22f, 3.2f, 10, Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1],
+                Style.GOLD_LIGHT[2], alpha * 0.8f);
+        b.quad(w - 37f, 27f, 14f, 3f, Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1],
+                Style.GOLD_LIGHT[2], alpha * 0.85f);
     }
 
     private void drawDetail(UiBatch b, AtlasFont font, float alpha, float w, float h) {
@@ -196,10 +201,11 @@ public final class TravelScreen implements Screen {
         b.quad(px, py, 3f, ph, Style.GOLD[0], Style.GOLD[1], Style.GOLD[2], alpha);
         b.quad(px + pw - 3f, py, 3f, ph, Style.GOLD[0], Style.GOLD[1], Style.GOLD[2], alpha);
 
-        if (selected < 0 || selected >= Elaris.REGION_COUNT) {
+        if (selected < 0 || selected > Elaris.REGION_COUNT) {
             return;
         }
-        Elaris.Region region = Elaris.regions()[selected];
+        boolean hollow = selected == Elaris.REGION_COUNT;
+        Elaris.Region region = hollow ? Elaris.HOLLOW_DEPTHS : Elaris.regions()[selected];
         float cx = px + 20f;
         float cy = py + 16f;
 
@@ -222,11 +228,12 @@ public final class TravelScreen implements Screen {
         drawFactWide(b, font, alpha, cx + (pw - 40f) * 0.46f, fy, "BOSS",
                 region.boss, (pw - 40f) * 0.54f);
         fy += 24f;
-        int pages = pagesWaiting(selected);
-        drawFact(b, font, alpha, cx, fy, "PAGES HIDDEN",
+        int pages = hollow ? -1 : pagesWaiting(selected);
+        drawFact(b, font, alpha, cx, fy, hollow ? "HOLLOW PAGES" : "PAGES HIDDEN",
                 pages < 0 ? "-" : String.valueOf(pages));
-        drawFact(b, font, alpha, cx + (pw - 40f) * 0.5f, fy, "HOLLOWS",
-                region.creatures.length > 0 ? region.creatures[0] : "-");
+        drawFact(b, font, alpha, cx + (pw - 40f) * 0.5f, fy,
+                hollow ? "ENTRANCE" : "HOLLOWS",
+                hollow ? "EVERGLOOM" : (region.creatures.length > 0 ? region.creatures[0] : "-"));
 
         // What the player will actually meet, listed rather than summarised.
         float cy2 = fy + 34f;
@@ -245,7 +252,10 @@ public final class TravelScreen implements Screen {
         }
 
         // Whether the way here is open, which is the only gate the design has.
-        if (region.gateFrom >= 0) {
+        if (hollow) {
+            b.textSpaced("THE ROOF IS ROCK. THE WAY OUT IS THE MAP.", cx, cly + 8f, 1, 0.35f,
+                    Style.INK[0], Style.INK[1], Style.INK[2], alpha * 0.9f, font);
+        } else if (region.gateFrom >= 0) {
             String gate = "THROUGH " + Elaris.regions()[region.gateFrom].name;
             b.textSpaced("ROUTE", cx, cly + 8f, 1, 0.6f,
                     Style.INK[0], Style.INK[1], Style.INK[2], alpha * 0.55f, font);
@@ -254,10 +264,13 @@ public final class TravelScreen implements Screen {
         }
 
         // The go button.
-        boolean here = world != null && world.regionIndex == selected;
+        boolean here = world != null && (hollow ? world.inHollow : world.regionIndex == selected);
         float bx = px + pw * 0.5f;
         float by = py + ph + 24f;
-        String goLabel = here ? "YOU ARE HERE" : "TRAVEL";
+        String goLabel = hollow
+                ? (world != null && world.inHollow ? "LEAVE THE HOLLOW"
+                : world != null && world.regionIndex == 12 ? "ENTER THE HOLLOW" : "TRAVEL TO EVERGLOOM")
+                : (here ? "YOU ARE HERE" : "TRAVEL");
         float goW = Math.max(150f,
                 UiBatch.textSpacedWidth(goLabel, font, 1, 3f) + 56f);
         GenshinKit.lozenge(b, bx, by, goW, 28f, !here, goPress, alpha);
@@ -299,7 +312,7 @@ public final class TravelScreen implements Screen {
             float top = ry + r * rowStep();
             int i = scroll + r;
             if (x >= rx && x <= rx + w * 0.325f && y >= top && y <= top + 28f) {
-                if (i < Elaris.REGION_COUNT) {
+                if (i < Elaris.REGION_COUNT + 1) {
                     selected = i;
                     rowPress[r] = 1f;
                 }
@@ -313,17 +326,27 @@ public final class TravelScreen implements Screen {
                 return Action.NONE;
             }
             if (y > ry + ROWS * rowStep()) {
-                scroll = Math.min(Math.max(0, Elaris.REGION_COUNT - ROWS), scroll + 1);
+                scroll = Math.min(Math.max(0, Elaris.REGION_COUNT + 1 - ROWS), scroll + 1);
                 return Action.NONE;
             }
         }
         // Travel.
         float bx = w * 0.365f + w * 0.59f * 0.5f;
         float by = h * 0.235f + h * 0.50f + 24f;
-        if (Math.abs(x - bx) < 84f && Math.abs(y - by) < 20f) {
+        if (Math.abs(x - bx) < 112f && Math.abs(y - by) < 20f) {
             goPress = 1f;
-            if (world != null && world.regionIndex != selected) {
-                world.enterRegion(selected);
+            if (world != null) {
+                if (selected == Elaris.REGION_COUNT) {
+                    if (world.inHollow) {
+                        world.leaveHollow();
+                    } else if (world.regionIndex == 12) {
+                        world.enterHollow();
+                    } else {
+                        world.enterRegion(12);
+                    }
+                } else if (world.regionIndex != selected || world.inHollow) {
+                    world.enterRegion(selected);
+                }
             }
             return Action.NONE;
         }

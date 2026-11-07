@@ -17,6 +17,40 @@ public final class Geometry {
 
     // ---------------------------------------------------------------- terrain
 
+    /** Irregular, glowing underside of the Hollow ceiling, lit from below. */
+    public static MeshData hollowCeiling(float halfExtent, float height, int segments) {
+        MeshData.Builder b = new MeshData.Builder();
+        int n = segments + 1;
+        for (int z = 0; z <= segments; z++) {
+            for (int x = 0; x <= segments; x++) {
+                float u = x / (float) segments;
+                float v = z / (float) segments;
+                float wx = (u * 2f - 1f) * halfExtent;
+                float wz = (v * 2f - 1f) * halfExtent;
+                float ridge = (float) (Math.sin(wx * 0.075f + Math.cos(wz * 0.041f))
+                        * Math.cos(wz * 0.062f - wx * 0.027f));
+                float y = height + ridge * 2.6f;
+                float vein = Noise.smoothstep(0.91f, 0.985f,
+                        0.5f + 0.5f * fastNoise(wx * 0.11f, wz * 0.11f));
+                float r = 0.075f + vein * 0.24f;
+                float g = 0.055f + vein * 0.10f;
+                float bl = 0.17f + vein * 0.36f;
+                int i = b.addVertex(wx, y, wz, 0f, -1f, 0f, r, g, bl, 1f, 0f);
+                if (x < segments && z < segments) {
+                    int a = i;
+                    int c = i + 1;
+                    int d = i + n;
+                    int e = d + 1;
+                    // Winding is double-sided on the GLES material; normals
+                    // explicitly face the player below the ceiling.
+                    b.addQuad(a, d, e, c);
+                }
+            }
+        }
+        return b.build();
+    }
+
+
     /**
      * Builds the terrain mesh with baked vertex colours: grass on gentle slopes,
      * rock on steep ones, sand near the water line and snow on peaks.
@@ -111,6 +145,13 @@ public final class Geometry {
                 gg *= ao;
                 gb *= ao;
 
+                if (t.region != null && t.region.index == 14) {
+                    // Black-violet basalt with scattered luminous mineral seams.
+                    float vein = Noise.smoothstep(0.955f, 0.995f, p3);
+                    gr = 0.075f + vein * 0.19f;
+                    gg = 0.055f + vein * 0.08f;
+                    gb = 0.14f + vein * 0.33f;
+                }
                 b.addVertex(x, y, z, normal.x, normal.y, normal.z, gr, gg, gb, 1f, 0f);
             }
         }

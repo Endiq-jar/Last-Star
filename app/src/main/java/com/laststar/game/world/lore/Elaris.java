@@ -238,6 +238,16 @@ public final class Elaris {
                     "THE KEEPER", 34, 40, 11),
     };
 
+    /** A distinct, explorable subterranean network reached through Evergloom. */
+    public static final Region HOLLOW_DEPTHS = new Region(14, "THE HOLLOW DEPTHS",
+            "An explorable rift network beneath Evergloom",
+            7f, 2.8f, 0f, 0f, -100f, 0.14f,
+            0.12f, 0.10f, 0.28f,
+            0.12f, 0.16f, 0.22f, 0.26f, 0.22f, 0.40f,
+            0.32f, 0.30f, 0.46f, 0f,
+            new String[]{"HOLLOW SPAWN", "GLOOM WALKER", "EMPTY CHOIR"},
+            "THE FIRST SILENCE", 30, 38, 12);
+
     /** Total settlements, asserted by the tests. */
     public static final int REGION_COUNT = 14;
 

@@ -144,6 +144,9 @@ public final class World {
 
     /** Region the world is currently built for. */
     private Elaris.Region region = Elaris.REGIONS[0];
+    /** True while the player is inside the explorable Hollow Depths. */
+    public boolean inHollow;
+    private int hollowReturnRegion = 12;
 
     public World(long seed) {
         this.worldSeed = (int) seed;
@@ -173,6 +176,7 @@ public final class World {
         if (index < 0 || index >= Elaris.REGION_COUNT) {
             return;
         }
+        inHollow = false;
         regionIndex = index;
         region = Elaris.regions()[index];
         Terrain next = Terrain.forRegion(region, 220f, 110, worldSeed + index * 7919L);
@@ -197,6 +201,40 @@ public final class World {
             }
         }
         showMessage(region.name + " -- " + region.identity, 2.8f, 0.6f);
+    }
+
+    /** Enter the Hollow Depths from Evergloom, rebuilding a distinct cavern arena. */
+    public boolean enterHollow() {
+        if (inHollow || regionIndex != 12) {
+            return false;
+        }
+        inHollow = true;
+        hollowReturnRegion = regionIndex;
+        region = Elaris.HOLLOW_DEPTHS;
+        terrain = Terrain.forRegion(region, 180f, 110,
+                worldSeed ^ 0x484F4C4C4F57L);
+        player.respawn(spawnPoint());
+        buildLevel(Math.max(level, region.minLevel));
+        phase = Phase.PLAYING;
+        quests.report(QuestCorpus.Kind.TRAVEL, region.name, 1);
+        showMessage("THE HOLLOW DEPTHS -- THERE IS NO SKY BELOW", 3.5f, 0.95f);
+        return true;
+    }
+
+    /** Leave the Hollow Depths at the Evergloom gate. */
+    public boolean leaveHollow() {
+        if (!inHollow) {
+            return false;
+        }
+        inHollow = false;
+        regionIndex = hollowReturnRegion;
+        region = Elaris.regions()[regionIndex];
+        terrain = Terrain.forRegion(region, 220f, 110, worldSeed + regionIndex * 7919L);
+        player.respawn(spawnPoint());
+        buildLevel(Math.max(1, level));
+        phase = Phase.PLAYING;
+        showMessage("BACK TO EVERGLOOM", 2.4f, 0.7f);
+        return true;
     }
 
     /**
