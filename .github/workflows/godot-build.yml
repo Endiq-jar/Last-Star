@@ -59,7 +59,7 @@ jobs:
       - name: Install Android platform and NDK packages
         shell: bash
         run: |
-          set -euo pipefail
+          set -eu
           yes | sdkmanager --licenses >/dev/null
           sdkmanager \
             "platform-tools" \
