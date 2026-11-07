@@ -13,6 +13,8 @@ public interface Screen {
         START_GAME,
         NAME_CHANGED,
         SWITCH_TAB,
+        /** Asks the menu to open the spell book. */
+        OPEN_SPELLS,
         BACK
     }
 

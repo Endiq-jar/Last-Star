@@ -7,6 +7,7 @@ import com.laststar.game.ui.screens.QuestsScreen;
 import com.laststar.game.ui.screens.Screen;
 import com.laststar.game.ui.screens.SettingsScreen;
 import com.laststar.game.ui.screens.ShopScreen;
+import com.laststar.game.ui.screens.SpellScreen;
 import com.laststar.game.ui.screens.WardrobeScreen;
 
 /**
@@ -21,7 +22,15 @@ public final class Menu {
 
     /** Which page the menu is showing. */
     public enum Page {
-        HOME, ABOUT, SHOP, QUESTS, WARDROBE, SETTINGS
+        HOME, ABOUT, SHOP, QUESTS, WARDROBE, SETTINGS,
+        /**
+         * The Wander, opened from the journal.
+         *
+         * <p>Reached from a screen rather than a tab: six tabs is already the
+         * width of a phone, and the book belongs next to the quests that fill
+         * it.</p>
+         */
+        SPELLS
     }
 
     private final TabBar tabs = new TabBar();
@@ -31,6 +40,7 @@ public final class Menu {
     public final AboutScreen about = new AboutScreen();
     public final ShopScreen shop = new ShopScreen();
     public final QuestsScreen quests = new QuestsScreen();
+    public final SpellScreen spellScreen = new SpellScreen();
     public final WardrobeScreen wardrobe = new WardrobeScreen();
     public final SettingsScreen settings = new SettingsScreen();
 
@@ -54,6 +64,7 @@ public final class Menu {
         bound = world;
         quests.bind(world);
         shop.bind(world);
+        spellScreen.bind(world);
     }
 
     public Menu() {
@@ -123,6 +134,12 @@ public final class Menu {
                 shown = wardrobe;
                 tabs.setActive(TabBar.Tab.WARDROBE);
                 break;
+            case SPELLS:
+                shown = spellScreen;
+                // The book has no tab of its own; the journal's stays lit so
+                // the player can see where they came from.
+                tabs.setActive(TabBar.Tab.QUESTS);
+                break;
             case SETTINGS:
             default:
                 shown = settings;
@@ -150,6 +167,7 @@ public final class Menu {
             case QUESTS:
                 return Backdrop.Id.QUESTS;
             case WARDROBE:
+            case SPELLS:
                 return Backdrop.Id.WARDROBE;
             case SHOP:
                 return Backdrop.Id.SHOP;
@@ -173,13 +191,20 @@ public final class Menu {
             return true;
         }
         Screen.Action action = shown.hit(x, y, w, h, tabs);
+        if (action == Screen.Action.OPEN_SPELLS) {
+            show(Page.SPELLS);
+            // The book has no tab of its own, so the journal's tab stays lit:
+            // the player came from there and back returns there.
+            return true;
+        }
         if (action == Screen.Action.START_GAME) {
             startRequested = true;
             home.pressTab();
             return true;
         }
         if (action == Screen.Action.BACK) {
-            show(Page.HOME);
+            // Back out of the book to the journal it was opened from.
+            show(page == Page.SPELLS ? Page.QUESTS : Page.HOME);
             return true;
         }
         return true;
@@ -228,6 +253,10 @@ public final class Menu {
             case WARDROBE:
                 shown = wardrobe;
                 tabs.setActive(TabBar.Tab.WARDROBE);
+                break;
+            case SPELLS:
+                shown = spellScreen;
+                tabs.setActive(TabBar.Tab.QUESTS);
                 break;
             case SETTINGS:
                 shown = settings;

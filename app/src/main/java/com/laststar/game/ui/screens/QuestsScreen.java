@@ -362,7 +362,7 @@ public final class QuestsScreen implements Screen {
         float bx = cx + cw * 0.78f;
         float by = cy + ch + 26f;
         GenshinKit.lozenge(b, bx, by, 100f, 27f, true, trackPress, alpha);
-        b.textSpacedCentred("TRACK", bx, by - font.capHeight(1) * 0.5f, 1, 3f,
+        b.textSpacedCentred("WANDER", bx, by - font.capHeight(1) * 0.5f, 1, 3f,
                 Style.IVORY[0], Style.IVORY[1], Style.IVORY[2], alpha, font);
 
         // ---- back / close ----
@@ -444,12 +444,12 @@ public final class QuestsScreen implements Screen {
                 return Action.NONE;
             }
         }
-        // Track.
+        // The book, which is where a tracked quest's reward usually lives.
         float bx = cardX(w) + cardW(w) * 0.78f;
         float by = cardY(h) + cardH(h) + 26f;
         if (Math.abs(x - bx) < 54f && Math.abs(y - by) < 18f) {
             trackPress = 1f;
-            return Action.NONE;
+            return Action.OPEN_SPELLS;
         }
         // Back / close.
         if (Math.abs(x - 30f) < 20f && Math.abs(y - 26f) < 20f) {

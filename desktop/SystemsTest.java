@@ -96,6 +96,27 @@ public final class SystemsTest {
         book.pages[0].awardXp(100000f);
         check("mastery stops at thirty", book.pages[0].level == 30);
 
+        // Equipping: the bar keeps itself closed up. Every starting page is on
+        // the bar, so a page has to be woken before it can be slotted -- which
+        // is exactly the sequence a player follows after a find.
+        int sleepingForBar = firstSleeping(book);
+        check("a page is woken to slot", sleepingForBar >= 0 && book.awaken(sleepingForBar));
+        int offBar = firstAwakeOffBar(book);
+        check("there is an awake page off the bar", offBar >= 0);
+        if (offBar >= 0) {
+            int slot = book.toggleEquip(offBar);
+            check("equipping returns a slot", slot >= 0 && slot < 4);
+            check("equipping puts it on the bar", book.equipped[slot] == offBar);
+            check("the bar closes the gap when full", barHasNoHoles(book));
+
+            // Take one off the bar, and the gap must close behind it.
+            int onBar = book.equipped[1];
+            check("unequipping removes it", book.toggleEquip(onBar) == -1);
+            check("no slot holds it any more", slotOf(book, onBar) < 0);
+            check("the bar closes the gap", barHasNoHoles(book));
+            check("the page goes back on", book.toggleEquip(onBar) >= 0);
+        }
+
         // Awakening.
         int sleeping = firstSleeping(book);
         check("there are pages still to find", sleeping >= 0);
@@ -103,6 +124,8 @@ public final class SystemsTest {
             check("awakening a page works", book.awaken(sleeping));
             check("awakening is not repeatable", !book.awaken(sleeping));
         }
+        check("most of the book is still to find",
+                countAwake(book) < book.pages.length / 2);
 
         float cap = book.lightCapacity;
         book.raiseCapacity(10f);
@@ -134,6 +157,47 @@ public final class SystemsTest {
         float before = book.light;
         book.cast(slot);
         return before - book.light;
+    }
+
+    /** First awake page that is not on the action bar. */
+    private static int firstAwakeOffBar(SpellBook book) {
+        for (int i = 0; i < book.pages.length; i++) {
+            if (book.pages[i].awake && slotOf(book, i) < 0) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static int slotOf(SpellBook book, int spell) {
+        for (int i = 0; i < book.equipped.length; i++) {
+            if (book.equipped[i] == spell) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static int firstAwake(SpellBook book) {
+        for (int i = 0; i < book.pages.length; i++) {
+            if (book.pages[i].awake) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** The filled slots of the bar are the first ones. */
+    private static boolean barHasNoHoles(SpellBook book) {
+        boolean sawEmpty = false;
+        for (int i = 0; i < book.equipped.length; i++) {
+            if (book.equipped[i] < 0) {
+                sawEmpty = true;
+            } else if (sawEmpty) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static int firstSleeping(SpellBook book) {

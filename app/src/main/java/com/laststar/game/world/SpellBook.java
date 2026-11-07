@@ -239,6 +239,40 @@ public final class SpellBook {
         equipped[slot] = pageIndex;
     }
 
+    /**
+     * Puts a page on the next free slot, or takes it off if it is already on
+     * the bar.
+     *
+     * <p>The bar keeps its slots closed up: removing the second of four shifts
+     * the rest down rather than leaving a hole the player has to tap past.</p>
+     *
+     * @return the slot it ended up in, or -1 if it was removed or could not be
+     *         placed
+     */
+    public int toggleEquip(int spell) {
+        if (spell < 0 || spell >= pages.length || !pages[spell].awake) {
+            return -1;
+        }
+        for (int i = 0; i < equipped.length; i++) {
+            if (equipped[i] == spell) {
+                for (int j = i; j < equipped.length - 1; j++) {
+                    equipped[j] = equipped[j + 1];
+                }
+                equipped[equipped.length - 1] = -1;
+                return -1;
+            }
+        }
+        for (int i = 0; i < equipped.length; i++) {
+            if (equipped[i] < 0) {
+                equipped[i] = spell;
+                return i;
+            }
+        }
+        // A full bar takes the page in the last slot.
+        equipped[equipped.length - 1] = spell;
+        return equipped.length - 1;
+    }
+
     /** Raises the Light ceiling, from a quest reward. */
     public void raiseCapacity(float amount) {
         lightCapacity = Math.min(400f, lightCapacity + amount);
