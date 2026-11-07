@@ -4,7 +4,7 @@
 
 The editor/runtime add-on in `addons/terrain_3d/` is **Terrain3D 1.1.0**, by Cory Petkovsek, Roope Palmroos, and contributors. It is distributed under the MIT License; the complete notice is in `addons/terrain_3d/LICENSE.txt`.
 
-The Terrain3D demo project and its bundled sample art are not included in this repository. The playable Last Star scene currently uses its own GDScript terrain streamer; the add-on is installed and enabled for editor use.
+The playable Terrain3D region data and material setup are based on the add-on's included demo resources. Sample ground textures are from ambientCG's Ground037 and Rock023 sets under CC0 1.0; their original notice and source links are retained in `assets/terrain3d/demo_assets/textures/asset_licenses.txt`. The main game's village, foliage, river, and gameplay remain original Last Star content.
 
 ## Last Star
 

@@ -15,7 +15,7 @@ Desktop controls: WASD to move, Space to jump, and mouse drag to orbit the camer
 
 ## Terrain3D add-on
 
-The MIT-licensed Terrain3D 1.1.0 Godot add-on is installed at `addons/terrain_3d/` and enabled as an editor plug-in. Its native extension includes Android ARM libraries as well as desktop libraries. The current playable world still generates its terrain with the project's GDScript streamer; Terrain3D is available in the editor, but the main scene has not yet been converted to Terrain3D nodes or data resources.
+The MIT-licensed Terrain3D 1.1.0 Godot add-on is installed at `addons/terrain_3d/` and enabled as an editor plug-in. The main scene now creates a Terrain3D node, loads its region data/material/texture assets from `assets/terrain3d/`, and assigns the player as its clipmap and collision target. The bundled sample height regions are offset so the playable village and starting area sit over the map. Android ARM libraries are included. The GDScript terrain remains as a fallback if the extension cannot load.
 
 The add-on's MIT license is retained at `addons/terrain_3d/LICENSE.txt`. Original game code is under the repository's EPL-2.0 license. See `CREDITS.md` for third-party notices.
 

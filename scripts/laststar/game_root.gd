@@ -12,6 +12,9 @@ const TREES_PER_CHUNK := 12
 const ROCKS_PER_CHUNK := 5
 const GRASS_PER_CHUNK := 46
 const FLOWERS_PER_CHUNK := 18
+const TERRAIN3D_DATA_DIRECTORY := "res://assets/terrain3d/data"
+# Centers the sample's 0, -1, and -2 regions around the playable start area.
+const TERRAIN3D_DATA_OFFSET := Vector3(-512.0, 0.0, 1536.0)
 
 var height_noise := FastNoiseLite.new()
 var detail_noise := FastNoiseLite.new()
@@ -28,6 +31,7 @@ var elapsed := 0.0
 var status_timer := 0.0
 var world_environment: WorldEnvironment
 var terrain_material: StandardMaterial3D
+var terrain3d: Node3D
 var tree_trunk_mesh: CylinderMesh
 var tree_leaf_mesh: CylinderMesh
 var rock_mesh: SphereMesh
@@ -54,6 +58,7 @@ func _ready() -> void:
 	_build_water()
 	_build_ridge_town()
 	_spawn_player()
+	_configure_terrain3d_targets()
 	_load_save()
 	_spawn_shards()
 	_spawn_warden()
@@ -76,8 +81,12 @@ func _process(delta: float) -> void:
 	if status_timer > 0.0:
 		status_timer -= delta
 	elif is_instance_valid(hud):
+		var terrain_status := "TERRAIN3D" if is_instance_valid(terrain3d) else "FALLBACK"
 		hud.set_world_status(
-			"DAY %02d   •   %.0f FPS" % [1 + int(elapsed / 360.0), Engine.get_frames_per_second()]
+			(
+				"DAY %02d   •   %s   •   %.0f FPS"
+				% [1 + int(elapsed / 360.0), terrain_status, Engine.get_frames_per_second()]
+			)
 		)
 	if is_instance_valid(hud) and is_instance_valid(player):
 		hud.set_vitals(player.health, player.energy, gold)
@@ -103,7 +112,13 @@ func height_at(x: float, z: float) -> float:
 	var river_distance := absf(x + 38.0 + (z + 26.0) * 0.12)
 	var river_blend := 1.0 - clampf((river_distance - 3.0) / 8.0, 0.0, 1.0)
 	river_blend = river_blend * river_blend * (3.0 - 2.0 * river_blend)
-	return lerpf(broad + detail + ridge, -0.72, river_blend)
+	var procedural_height := lerpf(broad + detail + ridge, -0.72, river_blend)
+	if is_instance_valid(terrain3d):
+		var terrain_data: Object = terrain3d.get("data")
+		if terrain_data != null:
+			var terrain_position := Vector3(x, 0.0, z) - TERRAIN3D_DATA_OFFSET
+			return float(terrain_data.call("get_height", terrain_position))
+	return procedural_height
 
 
 func path_center(x: float) -> float:
@@ -132,11 +147,45 @@ func _terrain_color(x: float, z: float, y: float) -> Color:
 	return base.lerp(path_color, path_edge)
 
 
+func _configure_terrain3d_targets() -> void:
+	if not is_instance_valid(terrain3d):
+		return
+	terrain3d.set("light_target", sun)
+	terrain3d.set("collision_target", player)
+	terrain3d.set("clipmap_target", player)
+
+
 func _build_terrain() -> void:
-	terrain_material = StandardMaterial3D.new()
-	terrain_material.vertex_color_use_as_albedo = true
-	terrain_material.roughness = 0.96
-	terrain_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var terrain_node := ClassDB.instantiate("Terrain3D") as Node3D
+	if terrain_node != null:
+		terrain3d = terrain_node
+		terrain3d.name = "Terrain3D"
+		terrain3d.position = TERRAIN3D_DATA_OFFSET
+		terrain3d.set("data_directory", TERRAIN3D_DATA_DIRECTORY)
+		terrain3d.set("material", load("res://assets/terrain3d/data/M_terrain.tres"))
+		terrain3d.set("assets", load("res://assets/terrain3d/data/assets.tres"))
+		terrain3d.set("tessellation_level", 2)
+		terrain3d.set("mesh_size", 48)
+		terrain3d.set("cull_margin", 420.0)
+		terrain3d.set("collision_layer", 1)
+		terrain3d.set("collision_mask", 1)
+		add_child(terrain3d)
+		var terrain_data: Object = terrain3d.get("data")
+		if terrain_data == null or int(terrain_data.call("get_region_count")) == 0:
+			push_warning(
+				"Terrain3D loaded without region data; using the built-in GDScript terrain fallback."
+			)
+			terrain3d.queue_free()
+			terrain3d = null
+	else:
+		push_warning(
+			"Terrain3D extension did not load; using the built-in GDScript terrain fallback."
+		)
+	if not is_instance_valid(terrain3d):
+		terrain_material = StandardMaterial3D.new()
+		terrain_material.vertex_color_use_as_albedo = true
+		terrain_material.roughness = 0.96
+		terrain_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_update_terrain_chunks(Vector2i.ZERO)
 
 
@@ -168,12 +217,18 @@ func _update_terrain_chunks(center: Vector2i) -> void:
 
 
 func _build_terrain_chunk(coord: Vector2i) -> Node3D:
+	var root := Node3D.new()
+	root.name = "TerrainChunk_%d_%d" % [coord.x, coord.y]
+	var world_origin := Vector2(coord) * TERRAIN_CHUNK_SIZE
+	root.position = Vector3(world_origin.x, 0.0, world_origin.y)
+	if is_instance_valid(terrain3d):
+		_decorate_terrain_chunk(root, coord)
+		return root
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
 	var indices := PackedInt32Array()
 	var step := TERRAIN_CHUNK_SIZE / float(TERRAIN_CHUNK_STEPS)
-	var world_origin := Vector2(coord) * TERRAIN_CHUNK_SIZE
 	for z_index in range(TERRAIN_CHUNK_STEPS + 1):
 		var local_z := float(z_index) * step
 		var world_z := world_origin.y + local_z
@@ -207,9 +262,6 @@ func _build_terrain_chunk(coord: Vector2i) -> Node3D:
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	mesh.surface_set_material(0, terrain_material)
-	var root := Node3D.new()
-	root.name = "TerrainChunk_%d_%d" % [coord.x, coord.y]
-	root.position = Vector3(world_origin.x, 0.0, world_origin.y)
 	var ground := MeshInstance3D.new()
 	ground.name = "Surface"
 	ground.mesh = mesh
@@ -257,7 +309,7 @@ func _build_water() -> void:
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(30.0, 100.0)
 	water.mesh = plane
-	water.position = Vector3(-38.0, -0.4, -26.0)
+	water.position = Vector3(-38.0, height_at(-38.0, -26.0) - 0.42, -26.0)
 	water.rotation_degrees.y = -12.0
 	var material := StandardMaterial3D.new()
 	material.albedo_color = Color(0.11, 0.52, 0.72, 0.84)
