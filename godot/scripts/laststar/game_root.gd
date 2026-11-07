@@ -10,6 +10,8 @@ const TERRAIN_CHUNK_STEPS := 20
 const TERRAIN_RENDER_DISTANCE := 3
 const TREES_PER_CHUNK := 12
 const ROCKS_PER_CHUNK := 5
+const GRASS_PER_CHUNK := 46
+const FLOWERS_PER_CHUNK := 18
 
 var height_noise := FastNoiseLite.new()
 var detail_noise := FastNoiseLite.new()
@@ -29,9 +31,16 @@ var terrain_material: StandardMaterial3D
 var tree_trunk_mesh: CylinderMesh
 var tree_leaf_mesh: CylinderMesh
 var rock_mesh: SphereMesh
+var grass_blade_mesh: CylinderMesh
+var flower_stem_mesh: CylinderMesh
+var flower_head_mesh: SphereMesh
 var tree_trunk_material: StandardMaterial3D
 var tree_leaf_material: StandardMaterial3D
 var rock_material: StandardMaterial3D
+var grass_material: StandardMaterial3D
+var flower_stem_material: StandardMaterial3D
+var flower_pink_material: StandardMaterial3D
+var flower_gold_material: StandardMaterial3D
 var terrain_chunks: Dictionary = {}
 var terrain_center := Vector2i(2147483647, 2147483647)
 var hud
@@ -104,20 +113,23 @@ func path_center(x: float) -> float:
 func _terrain_color(x: float, z: float, y: float) -> Color:
 	var variation := detail_noise.get_noise_2d(x * 2.0, z * 2.0)
 	var path_distance := absf(z - path_center(x))
-	if path_distance < 2.2:
-		return Color(0.49, 0.34, 0.23).lerp(
-			Color(0.62, 0.45, 0.29), clampf(variation * 0.55 + 0.5, 0.0, 1.0)
-		)
-	if y > 4.2:
-		return Color(0.48, 0.55, 0.46).lerp(
-			Color(0.78, 0.81, 0.72), clampf((y - 4.2) / 8.0, 0.0, 0.65)
-		)
-	var base := Color(0.28, 0.58, 0.29).lerp(
-		Color(0.42, 0.69, 0.34), clampf(variation * 0.65 + 0.5, 0.0, 1.0)
+	var base := Color("#559747").lerp(Color("#8cbd5b"), clampf(variation * 0.72 + 0.5, 0.0, 1.0))
+	var patch := height_noise.get_noise_2d(x * 0.45 + 90.0, z * 0.45 - 42.0)
+	if patch > 0.12:
+		base = base.lerp(Color("#347b53"), clampf((patch - 0.12) * 0.7, 0.0, 0.48))
+	var slope_x := height_at(x - 1.0, z) - height_at(x + 1.0, z)
+	var slope_z := height_at(x, z - 1.0) - height_at(x, z + 1.0)
+	var steepness := clampf(Vector2(slope_x, slope_z).length() * 0.18, 0.0, 0.55)
+	base = base.lerp(Color("#8a8977"), steepness)
+	if y > 5.5:
+		var snow := clampf((y - 5.5) / 5.0, 0.0, 0.8)
+		base = base.lerp(Color("#e8e8dc"), snow)
+	var path_edge := clampf((3.3 - path_distance) / 1.1, 0.0, 1.0)
+	path_edge = path_edge * path_edge * (3.0 - 2.0 * path_edge)
+	var path_color := Color("#aa8052").lerp(
+		Color("#c19b66"), clampf(variation * 0.55 + 0.5, 0.0, 1.0)
 	)
-	if absf(x) > 47.0 and y > 2.0:
-		base = base.lerp(Color(0.42, 0.48, 0.36), 0.28)
-	return base
+	return base.lerp(path_color, path_edge)
 
 
 func _build_terrain() -> void:
@@ -278,6 +290,29 @@ func _build_forest() -> void:
 	rock_material = StandardMaterial3D.new()
 	rock_material.albedo_color = Color("#71808b")
 	rock_material.roughness = 0.95
+	grass_blade_mesh = CylinderMesh.new()
+	grass_blade_mesh.top_radius = 0.012
+	grass_blade_mesh.bottom_radius = 0.055
+	grass_blade_mesh.height = 0.52
+	grass_material = StandardMaterial3D.new()
+	grass_material.albedo_color = Color("#86bd59")
+	grass_material.roughness = 1.0
+	flower_stem_mesh = CylinderMesh.new()
+	flower_stem_mesh.top_radius = 0.012
+	flower_stem_mesh.bottom_radius = 0.022
+	flower_stem_mesh.height = 0.38
+	flower_stem_material = StandardMaterial3D.new()
+	flower_stem_material.albedo_color = Color("#4b8a45")
+	flower_stem_material.roughness = 1.0
+	flower_head_mesh = SphereMesh.new()
+	flower_head_mesh.radius = 0.085
+	flower_head_mesh.height = 0.12
+	flower_pink_material = StandardMaterial3D.new()
+	flower_pink_material.albedo_color = Color("#f3a4c8")
+	flower_pink_material.roughness = 0.72
+	flower_gold_material = StandardMaterial3D.new()
+	flower_gold_material.albedo_color = Color("#f4d16e")
+	flower_gold_material.roughness = 0.72
 
 
 func _decorate_terrain_chunk(root: Node3D, coord: Vector2i) -> void:
@@ -341,6 +376,78 @@ func _decorate_terrain_chunk(root: Node3D, coord: Vector2i) -> void:
 		)
 	_fill_multimesh(rock_mm, rock_transforms)
 	_add_multimesh(root, "MeadowRocks", rock_mm, rock_material)
+	_add_meadow_details(root, coord, rng)
+
+
+func _add_meadow_details(root: Node3D, coord: Vector2i, rng: RandomNumberGenerator) -> void:
+	var grass_mm := _new_multimesh(grass_blade_mesh)
+	var stems_mm := _new_multimesh(flower_stem_mesh)
+	var pink_mm := _new_multimesh(flower_head_mesh)
+	var gold_mm := _new_multimesh(flower_head_mesh)
+	var grass_transforms: Array[Transform3D] = []
+	var stem_transforms: Array[Transform3D] = []
+	var pink_transforms: Array[Transform3D] = []
+	var gold_transforms: Array[Transform3D] = []
+	var grass_attempts := 0
+	while grass_transforms.size() < GRASS_PER_CHUNK and grass_attempts < GRASS_PER_CHUNK * 3:
+		grass_attempts += 1
+		var local_x := rng.randf_range(0.0, TERRAIN_CHUNK_SIZE)
+		var local_z := rng.randf_range(0.0, TERRAIN_CHUNK_SIZE)
+		var world_x := coord.x * TERRAIN_CHUNK_SIZE + local_x
+		var world_z := coord.y * TERRAIN_CHUNK_SIZE + local_z
+		if absf(world_z - path_center(world_x)) < 4.0:
+			continue
+		if absf(world_x + 38.0 + (world_z + 26.0) * 0.12) < 3.5:
+			continue
+		if height_at(world_x, world_z) > 5.8:
+			continue
+		var blade_height := rng.randf_range(0.58, 1.18)
+		var blade_basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU)).scaled(
+			Vector3(rng.randf_range(0.7, 1.25), blade_height, rng.randf_range(0.7, 1.25))
+		)
+		grass_transforms.append(
+			Transform3D(
+				blade_basis,
+				Vector3(local_x, height_at(world_x, world_z) + blade_height * 0.25, local_z)
+			)
+		)
+	var flower_attempts := 0
+	while (
+		pink_transforms.size() + gold_transforms.size() < FLOWERS_PER_CHUNK
+		and flower_attempts < FLOWERS_PER_CHUNK * 5
+	):
+		flower_attempts += 1
+		var local_x := rng.randf_range(0.0, TERRAIN_CHUNK_SIZE)
+		var local_z := rng.randf_range(0.0, TERRAIN_CHUNK_SIZE)
+		var world_x := coord.x * TERRAIN_CHUNK_SIZE + local_x
+		var world_z := coord.y * TERRAIN_CHUNK_SIZE + local_z
+		if absf(world_z - path_center(world_x)) < 3.8:
+			continue
+		if absf(world_x + 38.0 + (world_z + 26.0) * 0.12) < 3.5:
+			continue
+		if height_at(world_x, world_z) > 5.5:
+			continue
+		var ground_y := height_at(world_x, world_z)
+		var stem_basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU)).scaled(
+			Vector3.ONE * rng.randf_range(0.8, 1.2)
+		)
+		stem_transforms.append(Transform3D(stem_basis, Vector3(local_x, ground_y + 0.19, local_z)))
+		var head_origin := Vector3(local_x, ground_y + rng.randf_range(0.39, 0.48), local_z)
+		var head_transform := Transform3D(
+			Basis.IDENTITY.scaled(Vector3.ONE * rng.randf_range(0.8, 1.2)), head_origin
+		)
+		if rng.randf() < 0.55:
+			pink_transforms.append(head_transform)
+		else:
+			gold_transforms.append(head_transform)
+	_fill_multimesh(grass_mm, grass_transforms)
+	_fill_multimesh(stems_mm, stem_transforms)
+	_fill_multimesh(pink_mm, pink_transforms)
+	_fill_multimesh(gold_mm, gold_transforms)
+	_add_multimesh(root, "MeadowGrass", grass_mm, grass_material)
+	_add_multimesh(root, "WildflowerStems", stems_mm, flower_stem_material)
+	_add_multimesh(root, "PinkWildflowers", pink_mm, flower_pink_material)
+	_add_multimesh(root, "GoldenWildflowers", gold_mm, flower_gold_material)
 
 
 func _new_multimesh(mesh: Mesh) -> MultiMesh:
