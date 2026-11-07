@@ -51,12 +51,13 @@ public final class ScreenshotTool {
         shoot(outDir, w, h, "04-shard", Scenario.SHARD);
         shoot(outDir, w, h, "05-night", Scenario.NIGHT);
         shoot(outDir, w, h, "06-victory", Scenario.VICTORY);
+        shoot(outDir, w, h, "07-wander", Scenario.WANDER);
 
         System.out.println("screenshots written to " + outDir);
     }
 
     private enum Scenario {
-        INTRO, GAMEPLAY, COMBAT, SHARD, NIGHT, VICTORY
+        INTRO, GAMEPLAY, COMBAT, SHARD, NIGHT, VICTORY, WANDER
     }
 
     private static void shoot(String dir, int w, int h, String name, Scenario scenario) throws Exception {
@@ -107,6 +108,18 @@ public final class ScreenshotTool {
                 }
                 world.shardsCollected = 4;
                 step(world, input, 30);
+                break;
+            }
+            case WANDER: {
+                // Standing back from the book, so the shot shows the pickup,
+                // its halo and enough of the meadow to read the setting.
+                world.phase = World.Phase.PLAYING;
+                Vec3 book = world.wanderPosition;
+                world.player.position = book.add(new Vec3(2.6f, 0f, 3.4f))
+                        .withY(world.terrain.heightAt(book.x + 2.6f, book.z + 3.4f));
+                world.player.yaw = book.sub(world.player.position).headingDegrees();
+                input.cameraYaw = world.player.yaw;
+                step(world, input, 40);
                 break;
             }
             case VICTORY:
@@ -273,6 +286,8 @@ public final class ScreenshotTool {
         MeshData shard = Geometry.starShard(0.42f, 1f, 0.92f, 0.55f);
         MeshData ring = Geometry.groundRing(1f, 0.12f, 28, 1f, 1f, 1f, 1f);
         float[] shardTint = {1f, 0.93f, 0.52f};
+        float[] wanderTint = {0.70f, 0.62f, 1f};
+        float[] wanderHaloTint = {0.62f, 0.68f, 1f};
         float[] ringTint = {1f, 0.86f, 0.40f};
         for (Shard s : world.shards) {
             if (s.collected) {
@@ -288,6 +303,37 @@ public final class ScreenshotTool {
                     Mat4.scale(1.2f, 1f, 1.2f));
             raster.drawMesh(ring.positions, ring.normals, ring.colors, ring.indices,
                     rm, 0.55f, 0.6f, ringTint, 1f);
+        }
+
+        // The Wander, before it is picked up: the same float, halo and tint the
+        // renderer uses, so this shot is a real check on it.
+        if (MODELS != null && !world.hasWander && world.wanderPosition != null) {
+            int idx = -1;
+            for (int i = 0; i < MODELS.size(); i++) {
+                if (MODELS.get(i).name.equals("pk_spell-book")) {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx >= 0) {
+                Vec3 b = world.wanderPosition;
+                float bob = (float) Math.sin(world.worldTime * 1.6f) * 0.13f;
+                float y = b.y + 0.55f + bob;
+                // Halos are additive in the renderer; the software path has no
+                // blending, so it draws the ring flat, which is close enough to
+                // confirm placement and size.
+                Mat4 hm = new Mat4().setMultiply(
+                        Mat4.translation(b.x, y, b.z), Mat4.scale(1.5f, 1.5f, 1.5f));
+                raster.drawMesh(ring.positions, ring.normals, ring.colors,
+                        ring.indices, hm, 0.40f, 0.5f, wanderHaloTint, 1f);
+                Mat4 bm = new Mat4().setMultiply(
+                        Mat4.translation(b.x, y, b.z), Mat4.rotationY(world.wanderSpin));
+                ModelLibrary.Model book = MODELS.get(idx);
+                raster.setWaveAttribute(book.waveArray());
+                raster.drawMesh(book.positionArray(), book.normalArray(),
+                        book.colorArray(), book.indexArray(),
+                        bm, 0.42f, 0.55f, wanderTint, 0.55f);
+            }
         }
 
         // Pickups.
