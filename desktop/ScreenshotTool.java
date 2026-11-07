@@ -114,7 +114,8 @@ public final class ScreenshotTool {
                 // Standing back from the book, so the shot shows the pickup,
                 // its halo and enough of the meadow to read the setting.
                 world.phase = World.Phase.PLAYING;
-                Vec3 book = world.wanderPosition;
+                Vec3 book = world.lostPages.isEmpty() ? world.player.position
+                        : world.lostPages.get(0).position;
                 world.player.position = book.add(new Vec3(2.6f, 0f, 3.4f))
                         .withY(world.terrain.heightAt(book.x + 2.6f, book.z + 3.4f));
                 world.player.yaw = book.sub(world.player.position).headingDegrees();
@@ -307,7 +308,7 @@ public final class ScreenshotTool {
 
         // The Wander, before it is picked up: the same float, halo and tint the
         // renderer uses, so this shot is a real check on it.
-        if (MODELS != null && !world.hasWander && world.wanderPosition != null) {
+        if (MODELS != null && !world.lostPages.isEmpty()) {
             int idx = -1;
             for (int i = 0; i < MODELS.size(); i++) {
                 if (MODELS.get(i).name.equals("pk_spell-book")) {
@@ -316,7 +317,7 @@ public final class ScreenshotTool {
                 }
             }
             if (idx >= 0) {
-                Vec3 b = world.wanderPosition;
+                Vec3 b = world.lostPages.get(0).position;
                 float bob = (float) Math.sin(world.worldTime * 1.6f) * 0.13f;
                 float y = b.y + 0.55f + bob;
                 // Halos are additive in the renderer; the software path has no
@@ -327,7 +328,7 @@ public final class ScreenshotTool {
                 raster.drawMesh(ring.positions, ring.normals, ring.colors,
                         ring.indices, hm, 0.40f, 0.5f, wanderHaloTint, 1f);
                 Mat4 bm = new Mat4().setMultiply(
-                        Mat4.translation(b.x, y, b.z), Mat4.rotationY(world.wanderSpin));
+                        Mat4.translation(b.x, y, b.z), Mat4.rotationY(world.lostPages.get(0).spin));
                 ModelLibrary.Model book = MODELS.get(idx);
                 raster.setWaveAttribute(book.waveArray());
                 raster.drawMesh(book.positionArray(), book.normalArray(),

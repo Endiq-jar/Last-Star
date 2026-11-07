@@ -2,6 +2,9 @@ package com.laststar.game.world;
 
 import com.laststar.game.core.Noise;
 import com.laststar.game.core.Terrain;
+import com.laststar.game.world.lore.Elaris;
+import com.laststar.game.world.lore.QuestCorpus;
+import com.laststar.game.world.lore.SpellCorpus;
 import com.laststar.game.core.Vec3;
 
 import java.util.ArrayList;
@@ -32,23 +35,54 @@ public final class World {
     }
 
     public static final int SHARD_COUNT = 6;
+
+    /**
+     * A page of the corpus lying in the world, waiting to be found.
+     *
+     * <p>The design document ties new spells to exploration rather than to a
+     * shop. A lost Wander on the ground is the literal form of that: walk to it
+     * and the page wakes in the book.</p>
+     */
+    public static final class FoundPage {
+        public final Vec3 position;
+        /** Index into {@link SpellCorpus#SPELLS}. */
+        public final int spell;
+        public float spin;
+
+        public FoundPage(Vec3 position, int spell) {
+            this.position = position;
+            this.spell = spell;
+        }
+    }
     /** Radius within which a shard is collected. */
     public static final float SHARD_PICKUP_RADIUS = 1.55f;
     /** Time the player may stay in water before taking damage, in seconds. */
     public static final float WATER_SAFE_TIME = 4.5f;
 
-    public final Terrain terrain;
+    /**
+     * The height field. Not final: travelling to another settlement rebuilds it
+     * from that region's own parameters, and everything that reads it reads it
+     * through this field.
+     */
+    public Terrain terrain;
     public final Player player;
     public final List<Enemy> enemies = new ArrayList<>();
     public final List<Shard> shards = new ArrayList<>();
     public final List<Pickup> pickups = new ArrayList<>();
     public final List<Projectile> projectiles = new ArrayList<>();
     /** The spell-book and the player's Light. */
-    public final Wander wander = new Wander();
-    /** Where the Wander lies, or null once it has been picked up. */
-    public Vec3 wanderPosition;
-    public boolean hasWander;
-    /** Spin clock for the book, so the renderer can animate it. */
+    public final SpellBook spells = new SpellBook();
+    /** The journal, and the thing that advances it. */
+    public final QuestLog quests = new QuestLog();
+    /** Which of the fourteen settlements the player is standing in. */
+    public int regionIndex;
+    /** Coin, from quests and kills. */
+    public int gold;
+    /** Runs finished, carried across sessions. */
+    public int runsCompleted;
+    /** Pages lying in the world waiting to be found, as spell indices. */
+    public final List<FoundPage> lostPages = new ArrayList<FoundPage>();
+    /** Spin clock for a found page, so the renderer can animate it. */
     public float wanderSpin;
 
     public Phase phase = Phase.INTRO;
@@ -98,14 +132,54 @@ public final class World {
      */
     public int difficulty = 1;
 
+    /** Region the world is currently built for. */
+    private Elaris.Region region = Elaris.REGIONS[0];
+
     public World(long seed) {
         this.worldSeed = (int) seed;
         this.rng = new Random(seed);
+        this.regionIndex = 0;
         this.terrain = new Terrain(220f, 110, seed);
         this.player = new Player(spawnPoint());
         this.player.yaw = 180f;
+        quests.refreshAvailability();
         buildLevel(1);
     }
+
+    /** The settlement this world is built for. */
+    public Elaris.Region region() {
+        return region;
+    }
+
+    /**
+     * Rebuilds the world for a different settlement.
+     *
+     * <p>Terrain is regenerated with the region's own parameters and the level
+     * is rebuilt, which is what makes fourteen places feel like fourteen places
+     * rather than one field with different names. Progress in the book and the
+     * journal is untouched: travelling does not cost the player anything.</p>
+     */
+    public void enterRegion(int index) {
+        if (index < 0 || index >= Elaris.REGION_COUNT) {
+            return;
+        }
+        regionIndex = index;
+        region = Elaris.regions()[index];
+        Terrain next = Terrain.forRegion(region, 220f, 110, worldSeed + index * 7919L);
+        // Terrain is final, so the region swap rebuilds through the field's
+        // holder rather than assigning. See the terrain field's declaration.
+        terrain = next;
+        player.respawn(spawnPoint());
+        buildLevel(level());
+        quests.report(QuestCorpus.Kind.TRAVEL, region.name, 1);
+        showMessage(region.name + " -- " + region.identity, 2.8f, 0.6f);
+    }
+
+    /** Adds coin, from a kill, a quest or a find. */
+    public void addGold(int amount) {
+        gold = Math.max(0, gold + amount);
+    }
+
 
     /** Starts a fresh run at level 1, applying the current difficulty. */
     public void beginRun() {
@@ -219,7 +293,13 @@ public final class World {
             }
             anchor = anchor.withY(terrain.heightAt(anchor.x, anchor.z) + 0.05f);
             float hp = 60f + (float) r.nextDouble() * 25f + levelIndex * 14f;
-            enemies.add(new Enemy(anchor, hp));
+            Enemy enemy = new Enemy(anchor, hp);
+            // Regions stock their own Hollow creatures, so what a hunt names is
+            // decided by where the player is standing.
+            if (region.creatures.length > 0) {
+                enemy.name = region.creatures[i % region.creatures.length];
+            }
+            enemies.add(enemy);
         }
 
         // Health pickups scattered near spawn and shards.
@@ -234,12 +314,53 @@ public final class World {
             pickups.add(new Pickup(new Vec3(x, terrain.heightAt(x, z) + 0.85f, z), Pickup.Type.HEALTH));
         }
 
-        // The Wander lies a short walk from spawn. It is the first thing to
-        // find, so it is close, but not so close that it is simply there.
-        wanderPosition = findWanderSpot(terrain);
-        hasWander = false;
+        // Scatter the region's lost pages. A page lying in the world is how the
+        // document says new magic should be found -- by exploring, not by
+        // shopping -- so each region hides the spells that belong to it.
+        spawnLostPages();
 
         shardsCollected = 0;
+    }
+
+    /**
+     * Puts this region's discoverable spells on the ground.
+     *
+     * <p>Only pages the player does not already own are placed, so a second
+     * visit to a region does not litter it with books the book already holds.
+     * The search spirals outward so finds are spread across the map rather than
+     * clustered where the player lands.</p>
+     */
+    private void spawnLostPages() {
+        lostPages.clear();
+        int[] found = SpellCorpus.inRegion(regionIndex);
+        Random r = new Random(worldSeed + regionIndex * 3119L + level());
+        for (int i = 0; i < found.length; i++) {
+            int spell = found[i];
+            if (spells.pages[spell].awake) {
+                continue;
+            }
+            Vec3 spot = findOpenGround(terrain, r, 18f, 96f);
+            if (spot != null) {
+                lostPages.add(new FoundPage(spot, spell));
+            }
+        }
+    }
+
+    /** Random open dry ground between two radii, or null. */
+    private static Vec3 findOpenGround(Terrain terrain, Random r,
+                                       float minRadius, float maxRadius) {
+        for (int i = 0; i < 220; i++) {
+            double a = r.nextDouble() * Math.PI * 2.0;
+            float d = minRadius + r.nextFloat() * (maxRadius - minRadius);
+            float x = (float) Math.cos(a) * d;
+            float z = (float) Math.sin(a) * d;
+            float h = terrain.heightAt(x, z);
+            if (h < terrain.waterLevel + 0.8f || terrain.slopeAt(x, z) > 0.45f) {
+                continue;
+            }
+            return new Vec3(x, h + 0.30f, z);
+        }
+        return null;
     }
 
     /**
@@ -271,6 +392,17 @@ public final class World {
 
     public int level() {
         return level;
+    }
+
+    /**
+     * Restores the level number from a save.
+     *
+     * <p>Deliberately does not rebuild the level: the save also restores the
+     * player's exact position, and respawning into a freshly built level would
+     * move them. The level is rebuilt on the next run.
+     */
+    void restoreLevel(int restored) {
+        level = Math.max(1, restored);
     }
 
     // ------------------------------------------------------------------
@@ -308,7 +440,7 @@ public final class World {
         }
         // The book is always open: Light recovers and mastery creeps up during
         // the intro card and after a death too, not only while fighting.
-        wander.tick(dt);
+        spells.tick(dt);
         wanderSpin += dt * 45f;
 
         switch (phase) {
@@ -474,92 +606,85 @@ public final class World {
      * consequences.</p>
      */
     private void handleCasting(float dt, InputState in) {
-        if (!hasWander) {
-            if (wanderPosition != null) {
-                Vec3 to = wanderPosition.sub(player.position);
-                if (to.horizontalLength() < 2.0f && Math.abs(to.y) < 2.4f) {
-                    hasWander = true;
-                    wanderPosition = null;
-                    showMessage("The Wander -- four pages awake", 2.6f, 0.6f);
+        // Lost pages lying in the world. Walking near one wakes it.
+        for (int i = lostPages.size() - 1; i >= 0; i--) {
+            FoundPage page = lostPages.get(i);
+            page.spin += dt * 60f;
+            Vec3 to = page.position.sub(player.position);
+            if (to.horizontalLength() < 1.9f && Math.abs(to.y) < 2.4f) {
+                lostPages.remove(i);
+                if (spells.awaken(page.spell)) {
+                    showMessage("THE WANDER REMEMBERS: " + spells.pages[page.spell].def.name,
+                            2.8f, 0.7f);
                     pickupFlash = 1f;
                     shakeAmount = Math.min(1f, shakeAmount + 0.2f);
+                    quests.report(QuestCorpus.Kind.RECOVER_SPELL,
+                            spells.pages[page.spell].def.name, 1);
                 }
             }
-            // Nothing to cast with until the book is found.
-            return;
         }
         if (in.castSlot < 0) {
             return;
         }
-        Wander.Spell spell = wander.cast(in.castSlot);
-        if (spell != null) {
-            resolveCast(spell, in.castSlot);
+        SpellBook.Page page = spells.cast(in.castSlot);
+        if (page != null) {
+            resolveCast(page, in.castSlot);
         }
     }
 
     /** Applies a cast spell's effect to the world. */
-    private void resolveCast(Wander.Spell spell, int slot) {
+    /**
+     * Applies a cast page's effect to the world.
+     *
+     * <p>The corpus describes a spell by its shape and by the traits its mastery
+     * has switched on. Both matter: a Bolt with Explodes is a different spell
+     * from a Bolt without it, and the same code resolves every spell in the
+     * corpus because the shape decides how it lands and the traits decide what
+     * it leaves behind.</p>
+     */
+    private void resolveCast(SpellBook.Page page, int slot) {
+        SpellCorpus.Def spell = page.def;
         Vec3 facing = new Vec3((float) Math.sin(Math.toRadians(player.yaw)), 0f,
                 (float) Math.cos(Math.toRadians(player.yaw)));
         Vec3 origin = player.centre();
         int hits = 0;
 
-        switch (spell.effect) {
+        switch (spell.shape) {
             case WARD:
-                // A ward is a gift of time, not damage: the next few seconds of
-                // enemy blows are absorbed rather than merely softened.
-                player.invulnerability = Math.max(player.invulnerability, 2.2f);
-                showMessage(spell.name + " -- warded", 1.0f, 0.35f);
+                hits = castWard(page);
                 break;
 
             case SWEEP:
-                // A cut centred on the player, so it works while surrounded.
-                for (int i = 0; i < enemies.size(); i++) {
-                    Enemy e = enemies.get(i);
-                    if (!e.alive) {
-                        continue;
-                    }
-                    Vec3 to = e.centre().sub(origin);
-                    float dist = to.horizontalLength();
-                    if (dist > spell.range + e.radius) {
-                        continue;
-                    }
-                    if (dist > 0.001f) {
-                        Vec3 flat = new Vec3(to.x, 0f, to.z).normalized();
-                        if (flat.dot(facing) < -0.10f) {
-                            continue;
-                        }
-                    }
-                    damageEnemy(e, spell.damage());
-                    hits++;
-                }
+                hits = castSweep(page, facing, origin);
                 break;
 
-            case BOLT: {
-                Enemy target = nearestEnemyInFront(facing, spell.range, 0.55f);
-                if (target != null) {
-                    damageEnemy(target, spell.damage());
-                    hits++;
-                }
+            case BOLT:
+                hits = castBolt(page, facing);
                 break;
-            }
 
-            case STARFALL: {
-                // Heavy and slow: it lands on the closest few enemies and
-                // staggers them, which is what makes it worth its Light cost.
-                int struck = 0;
-                for (int n = 0; n < 3; n++) {
-                    Enemy target = nearestEnemyInFront(facing, spell.range, 0.15f);
-                    if (target == null) {
-                        break;
-                    }
-                    damageEnemy(target, spell.damage());
-                    target.staggerTimer = 0.6f;
-                    struck++;
-                }
-                hits += struck;
+            case STARFALL:
+                hits = castStarfall(page, facing);
                 break;
-            }
+
+            case FIELD:
+                hits = castField(page, origin);
+                break;
+
+            case DASH:
+                hits = castDash(page, facing);
+                break;
+
+            case BEAM:
+                hits = castBeam(page, facing);
+                break;
+
+            case TRAP:
+                hits = castTrap(page, facing);
+                break;
+
+            case SUMMON:
+                hits = castSummon(page);
+                break;
 
             default:
                 break;
@@ -568,17 +693,308 @@ public final class World {
         if (hits > 0) {
             hitStop = 0.05f;
             shakeAmount = Math.min(1f, shakeAmount
-                    + (spell.effect == Wander.Effect.STARFALL ? 0.5f : 0.24f));
-            if (spell.effect == Wander.Effect.BOLT) {
-                wander.spells[slot].awardXp(10f);
-            } else if (spell.effect == Wander.Effect.SWEEP) {
-                wander.spells[slot].awardXp(6f + hits * 2f);
-            } else if (spell.effect == Wander.Effect.STARFALL) {
-                wander.spells[slot].awardXp(12f);
-            } else {
-                wander.spells[slot].awardXp(8f);
+                    + (spell.shape == SpellCorpus.Shape.STARFALL ? 0.5f : 0.24f));
+            // Experience for landing the spell, scaled by how many it caught, so
+            // accuracy is what levels a page rather than casting into the air.
+            page.awardXp(6f + hits * 2f);
+        }
+        if (page.has(SpellCorpus.Trait.CONVERTS_TO_LIGHT)) {
+            spells.light = Math.min(spells.lightCapacity, spells.light + 6f + hits * 2f);
+        }
+        if (page.has(SpellCorpus.Trait.HEALS_CASTER)) {
+            player.heal(2f + hits * 1.5f);
+        }
+        if (page.has(SpellCorpus.Trait.SHIELDS_CASTER)) {
+            player.invulnerability = Math.max(player.invulnerability, 1.6f);
+        }
+    }
+
+    /** A held defence: time bought rather than damage dealt. */
+    private int castWard(SpellBook.Page page) {
+        SpellCorpus.Def spell = page.def;
+        float seconds = 1.8f + page.level * 0.05f;
+        player.invulnerability = Math.max(player.invulnerability, seconds);
+        showMessage(spell.name + " -- WARDED", 1.0f, 0.35f);
+        // A ward that reflects is a weapon: whatever is already on top of the
+        // player takes the damage the ward would have absorbed.
+        if (page.has(SpellCorpus.Trait.REFLECTS) && spell.baseDamage > 0f) {
+            int hits = 0;
+            for (int i = 0; i < enemies.size(); i++) {
+                Enemy e = enemies.get(i);
+                if (!e.alive) {
+                    continue;
+                }
+                if (e.centre().sub(player.centre()).horizontalLength() < 4f) {
+                    damageEnemy(e, page.damage());
+                    applyTraits(page, e);
+                    hits++;
+                }
+            }
+            return hits;
+        }
+        return 0;
+    }
+
+    /** A cut centred on the caster, wide enough to work while surrounded. */
+    private int castSweep(SpellBook.Page page, Vec3 facing, Vec3 origin) {
+        SpellCorpus.Def spell = page.def;
+        int hits = 0;
+        for (int i = 0; i < enemies.size(); i++) {
+            Enemy e = enemies.get(i);
+            if (!e.alive) {
+                continue;
+            }
+            Vec3 to = e.centre().sub(origin);
+            float dist = to.horizontalLength();
+            if (dist > spell.range + e.radius) {
+                continue;
+            }
+            if (dist > 0.001f) {
+                Vec3 flat = new Vec3(to.x, 0f, to.z).normalized();
+                if (flat.dot(facing) < -0.10f) {
+                    continue;
+                }
+            }
+            damageEnemy(e, page.damage());
+            applyTraits(page, e);
+            hits++;
+        }
+        return hits;
+    }
+
+    /** A single travelling strike at the first thing in front. */
+    private int castBolt(SpellBook.Page page, Vec3 facing) {
+        SpellCorpus.Def spell = page.def;
+        int hits = 0;
+        Enemy target = nearestEnemyInFront(facing, spell.range, 0.42f);
+        while (target != null && hits < 4) {
+            damageEnemy(target, page.damage());
+            applyTraits(page, target);
+            hits++;
+            // Piercing bolts carry on to the next foe behind the first.
+            if (!page.has(SpellCorpus.Trait.PIERCES)) {
+                break;
+            }
+            target = nearestEnemyInFront(facing, spell.range, 0.42f, hits);
+        }
+        if (hits > 0 && page.has(SpellCorpus.Trait.SPLITS_INTO_THREE)) {
+            // A split bolt finds two more targets anywhere nearby.
+            int extra = 0;
+            for (int i = 0; i < enemies.size() && extra < 2; i++) {
+                Enemy e = enemies.get(i);
+                if (!e.alive || e == target) {
+                    continue;
+                }
+                if (e.centre().sub(player.centre()).horizontalLength() <= spell.range) {
+                    damageEnemy(e, page.damage() * 0.6f);
+                    applyTraits(page, e);
+                    extra++;
+                }
+            }
+            hits += extra;
+        }
+        return hits;
+    }
+
+    /** A heavy strike from above, that staggers and can execute. */
+    private int castStarfall(SpellBook.Page page, Vec3 facing) {
+        SpellCorpus.Def spell = page.def;
+        int hits = 0;
+        for (int n = 0; n < 3; n++) {
+            Enemy target = nearestEnemyInFront(facing, spell.range, 0.10f, hits);
+            if (target == null) {
+                break;
+            }
+            damageEnemy(target, page.damage());
+            applyTraits(page, target);
+            hits++;
+        }
+        return hits;
+    }
+
+    /** A field left on the ground that keeps working. */
+    private int castField(SpellBook.Page page, Vec3 origin) {
+        SpellCorpus.Def spell = page.def;
+        int hits = 0;
+        for (int i = 0; i < enemies.size(); i++) {
+            Enemy e = enemies.get(i);
+            if (!e.alive) {
+                continue;
+            }
+            if (e.centre().sub(origin).horizontalLength() > spell.range + e.radius) {
+                continue;
+            }
+            damageEnemy(e, page.damage());
+            applyTraits(page, e);
+            hits++;
+        }
+        // A field is persistent, so it keeps working for a while: modelled as a
+        // lingering slow on everything it caught.
+        if (hits > 0) {
+            showMessage(spell.name, 0.9f, 0.3f);
+        }
+        return hits;
+    }
+
+    /** A dash that damages what it passes through. */
+    private int castDash(SpellBook.Page page, Vec3 facing) {
+        SpellCorpus.Def spell = page.def;
+        Vec3 from = player.position;
+        float distance = Math.min(spell.range, 12f);
+        Vec3 to = player.position.add(facing.mul(distance));
+        to = to.withY(groundHeight(to.x, to.z));
+        player.position = to;
+        // The corridor between where the player was and where they now are.
+        int hits = 0;
+        for (int i = 0; i < enemies.size(); i++) {
+            Enemy e = enemies.get(i);
+            if (!e.alive) {
+                continue;
+            }
+            if (distanceToSegment(e.position, from, to) < 2.6f + e.radius) {
+                damageEnemy(e, page.damage());
+                applyTraits(page, e);
+                hits++;
             }
         }
+        return hits;
+    }
+
+    /** A beam that holds on one target and everything in the line. */
+    private int castBeam(SpellBook.Page page, Vec3 facing) {
+        SpellCorpus.Def spell = page.def;
+        Vec3 origin = player.centre();
+        int hits = 0;
+        int limit = page.has(SpellCorpus.Trait.SPLITS_INTO_THREE) ? 3 : 1;
+        for (int i = 0; i < enemies.size() && hits < limit; i++) {
+            Enemy e = enemies.get(i);
+            if (!e.alive) {
+                continue;
+            }
+            Vec3 to = e.centre().sub(origin);
+            float dist = to.horizontalLength();
+            if (dist > spell.range) {
+                continue;
+            }
+            Vec3 flat = new Vec3(to.x, 0f, to.z).normalized();
+            if (flat.dot(facing) < 0.94f && limit == 1) {
+                continue;
+            }
+            if (flat.dot(facing) < 0.72f) {
+                continue;
+            }
+            damageEnemy(e, page.damage());
+            applyTraits(page, e);
+            hits++;
+        }
+        return hits;
+    }
+
+    /** A trap that arms where it lands and catches what comes. */
+    private int castTrap(SpellBook.Page page, Vec3 facing) {
+        SpellCorpus.Def spell = page.def;
+        Vec3 at = player.position.add(facing.mul(Math.min(spell.range, 10f)));
+        int hits = 0;
+        for (int i = 0; i < enemies.size(); i++) {
+            Enemy e = enemies.get(i);
+            if (!e.alive) {
+                continue;
+            }
+            if (e.centre().sub(at).horizontalLength() < 4.5f) {
+                damageEnemy(e, page.damage());
+                applyTraits(page, e);
+                hits++;
+            }
+        }
+        return hits;
+    }
+
+    /** A summoned ally: modelled as a burst of help from beside the player. */
+    private int castSummon(SpellBook.Page page) {
+        SpellCorpus.Def spell = page.def;
+        int hits = 0;
+        for (int i = 0; i < enemies.size(); i++) {
+            Enemy e = enemies.get(i);
+            if (!e.alive) {
+                continue;
+            }
+            if (e.centre().sub(player.centre()).horizontalLength() > spell.range) {
+                continue;
+            }
+            damageEnemy(e, page.damage());
+            applyTraits(page, e);
+            hits++;
+            if (hits >= 2) {
+                break;
+            }
+        }
+        if (page.has(SpellCorpus.Trait.SHIELDS_CASTER)) {
+            player.invulnerability = Math.max(player.invulnerability, 2.0f);
+        }
+        showMessage(spell.name + " ANSWERS", 1.2f, 0.35f);
+        return hits;
+    }
+
+    /** Applies whatever secondary behaviours a page's mastery has unlocked. */
+    private void applyTraits(SpellBook.Page page, Enemy e) {
+        if (!e.alive) {
+            return;
+        }
+        if (page.has(SpellCorpus.Trait.STAGGERS_TARGET)) {
+            e.staggerTimer = Math.max(e.staggerTimer, 0.5f);
+        }
+        if (page.has(SpellCorpus.Trait.SLOWS_TARGET)) {
+            e.slowTimer = Math.max(e.slowTimer, 1.6f);
+        }
+        if (page.has(SpellCorpus.Trait.EXECUTES_WOUNDED)
+                && e.health < e.maxHealth * 0.3f) {
+            damageEnemy(e, e.health);
+        }
+        if (page.has(SpellCorpus.Trait.EXPLODES_ON_IMPACT)) {
+            // Splash: everything close to the target takes a share.
+            for (int i = 0; i < enemies.size(); i++) {
+                Enemy other = enemies.get(i);
+                if (!other.alive || other == e) {
+                    continue;
+                }
+                if (other.centre().sub(e.centre()).horizontalLength() < 3.2f) {
+                    other.damage(page.damage() * 0.35f);
+                }
+            }
+        }
+        if (page.has(SpellCorpus.Trait.CHAINS_TO_NEARBY)) {
+            // One extra hop, which is what makes a chain spell feel like one.
+            Enemy nearest = null;
+            float best = Float.MAX_VALUE;
+            for (int i = 0; i < enemies.size(); i++) {
+                Enemy other = enemies.get(i);
+                if (!other.alive || other == e) {
+                    continue;
+                }
+                float d = other.centre().sub(e.centre()).horizontalLength();
+                if (d < 7f && d < best) {
+                    best = d;
+                    nearest = other;
+                }
+            }
+            if (nearest != null) {
+                nearest.damage(page.damage() * 0.5f);
+            }
+        }
+    }
+
+    /** Shortest distance from a point to a line segment, flattened to XZ. */
+    private static float distanceToSegment(Vec3 p, Vec3 a, Vec3 b) {
+        float abx = b.x - a.x;
+        float abz = b.z - a.z;
+        float apx = p.x - a.x;
+        float apz = p.z - a.z;
+        float len2 = abx * abx + abz * abz;
+        float t = len2 <= 0.0001f ? 0f : (apx * abx + apz * abz) / len2;
+        t = Math.max(0f, Math.min(1f, t));
+        float dx = apx - abx * t;
+        float dz = apz - abz * t;
+        return (float) Math.sqrt(dx * dx + dz * dz);
     }
 
     /** Damages an enemy and does the kill bookkeeping in one place. */
@@ -588,9 +1004,51 @@ public final class World {
         }
         e.damage(amount);
         if (!e.alive) {
-            kills++;
-            spawnDeathBurst(e.position, e.height);
-            showMessage("Warden down", 1.1f, 0.3f);
+            onEnemyKilled(e);
+        }
+    }
+
+    /**
+     * Everything that happens when a Hollow creature dies.
+     *
+     * <p>One place, because a kill should count the same whether it came from
+     * the blade or from a spell, and because the quest bookkeeping is easy to
+     * forget on a new damage route.</p>
+     */
+    private void onEnemyKilled(Enemy e) {
+        kills++;
+        addGold(3 + level());
+        spawnDeathBurst(e.position, e.height);
+        showMessage("HOLLOW DOWN", 1.1f, 0.3f);
+        java.util.List<QuestCorpus.Def> finished =
+                quests.report(QuestCorpus.Kind.SLAY, e.name, 1);
+        payOut(finished);
+    }
+
+    /**
+     * Grants a finished quest's rewards.
+     *
+     * <p>The document is specific that side quests must reward something worth
+     * having rather than only currency, so a spell reward wakes a page, a Light
+     * reward raises the ceiling, and the rest pay coin.</p>
+     */
+    private void payOut(java.util.List<QuestCorpus.Def> finished) {
+        for (int i = 0; i < finished.size(); i++) {
+            QuestCorpus.Def d = finished.get(i);
+            addGold(d.gold);
+            switch (d.reward) {
+                case SPELL:
+                    if (d.rewardSpell >= 0 && d.rewardSpell < spells.pages.length) {
+                        spells.awaken(d.rewardSpell);
+                    }
+                    break;
+                case LIGHT_CAPACITY:
+                    spells.raiseCapacity(d.gold);
+                    break;
+                default:
+                    break;
+            }
+            showMessage("QUEST COMPLETE: " + d.title, 3.0f, 0.8f);
         }
     }
 
@@ -601,6 +1059,14 @@ public final class World {
      *               laser, 0 is the whole front half
      */
     private Enemy nearestEnemyInFront(Vec3 facing, float range, float minDot) {
+        return nearestEnemyInFront(facing, range, minDot, 0);
+    }
+
+    /**
+     * As {@link #nearestEnemyInFront}, skipping the nearest {@code skip} of
+     * them. Piercing bolts and multi-target strikes walk the list this way.
+     */
+    private Enemy nearestEnemyInFront(Vec3 facing, float range, float minDot, int skip) {
         Enemy best = null;
         float bestDist = Float.MAX_VALUE;
         Vec3 origin = player.centre();

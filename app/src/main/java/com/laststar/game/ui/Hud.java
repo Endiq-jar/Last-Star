@@ -4,8 +4,9 @@ import com.laststar.game.core.Noise;
 import com.laststar.game.world.Enemy;
 import com.laststar.game.world.Player;
 import com.laststar.game.world.Shard;
-import com.laststar.game.world.Wander;
+import com.laststar.game.world.SpellBook;
 import com.laststar.game.world.World;
+import com.laststar.game.world.lore.SpellCorpus;
 
 /**
  * Builds the 2D interface for a frame: health/stamina bars, shard counter,
@@ -60,9 +61,7 @@ public final class Hud {
                 || world.phase == World.Phase.DEFEAT;
         if (controlsVisible) {
             drawControls(b, controls);
-            if (world.hasWander) {
-                drawSpellSlots(b, world, controls);
-            }
+            drawSpellSlots(b, world, controls);
         }
         drawMessages(b, world);
 
@@ -120,14 +119,11 @@ public final class Hud {
      * rather than fear empty.</p>
      */
     private void drawLightBar(UiBatch b, World world) {
-        if (!world.hasWander) {
-            return;
-        }
         float x = 16f;
         float y = 14f + 11f + 6f + 6f + 5f;
         float barW = 148f;
         float barH = 8f;
-        float f = world.wander.lightFraction();
+        float f = world.spells.lightFraction();
 
         b.quad(x - 3f, y - 3f, barW + 6f, barH + 6f, 0f, 0f, 0f, 0.42f);
         b.quad(x, y, barW, barH, 0.11f, 0.09f, 0.04f, 1f);
@@ -138,11 +134,11 @@ public final class Hud {
 
         // A cast refused for lack of Light pulses the bar red, so the refusal
         // is visible where the resource is rather than only on the slot.
-        if (world.wander.lightStarved > 0f) {
+        if (world.spells.lightStarved > 0f) {
             b.quad(x, y, barW, barH, 1f, 0.25f, 0.20f,
-                    world.wander.lightStarved * 0.7f);
+                    world.spells.lightStarved * 0.7f);
         }
-        b.text("LIGHT " + (int) world.wander.light, x + 3f, y - 1f, 1,
+        b.text("LIGHT " + (int) world.spells.light, x + 3f, y - 1f, 1,
                 1f, 0.95f, 0.80f, 0.95f, font);
     }
 
@@ -155,14 +151,17 @@ public final class Hud {
      * minute, but the label is what teaches it.</p>
      */
     private void drawSpellSlots(UiBatch b, World world, TouchControls controls) {
-        for (int i = 0; i < controls.spell.length && i < world.wander.spells.length; i++) {
-            Wander.Spell spell = world.wander.spells[i];
+        for (int i = 0; i < controls.spell.length && i < world.spells.equipped.length; i++) {
+            SpellBook.Page spell = world.spells.pageAt(i);
             TouchControls.Button btn = controls.spell[i];
+            if (spell == null) {
+                continue;
+            }
             float press = btn.pressAmount;
             float radius = btn.radius * (1f - press * 0.08f);
 
-            float[] c = schoolColour(spell.school);
-            boolean ready = spell.ready(world.wander);
+            float[] c = schoolColour(spell.def.category);
+            boolean ready = spell.ready(world.spells);
 
             b.glow(btn.x, btn.y, radius * 1.5f, 14, c[0], c[1], c[2],
                     ready ? 0.16f + press * 0.18f : 0.05f);
@@ -176,14 +175,14 @@ public final class Hud {
                     1f, 0.94f, 0.72f, 0.22f + spell.progress() * 0.62f);
 
             // Cooldown: a dark disc that shrinks away as the spell returns.
-            if (spell.cooldownLeft > 0f && spell.cooldown > 0f) {
-                float left = spell.cooldownLeft / spell.cooldown;
+            if (spell.cooldownLeft > 0f && spell.def.cooldown > 0f) {
+                float left = spell.cooldownLeft / spell.def.cooldown;
                 b.circle(btn.x, btn.y, radius * 0.84f * left, 16, 0f, 0f, 0f, 0.55f);
             }
 
             b.text((i + 1) + "", btn.x - 2f, btn.y - 4f, 1, 1f, 1f, 1f,
                     ready ? 0.95f : 0.45f, font);
-            b.text(spell.name, btn.x - 2f, btn.y + radius + 2f, 1,
+            b.text(shortName(spell.def.name), btn.x - 2f, btn.y + radius + 2f, 1,
                     1f, 1f, 1f, 0.62f, font);
             if (spell.level > 1) {
                 b.text("L" + spell.level, btn.x + radius - 3f,
@@ -193,20 +192,33 @@ public final class Hud {
     }
 
     /** Slot colour per spell school, so the bar is readable at a glance. */
-    private static float[] schoolColour(String school) {
-        if ("Elemental".equals(school)) {
-            return new float[]{0.98f, 0.52f, 0.24f};
+    private static float[] schoolColour(SpellCorpus.Category category) {
+        switch (category) {
+            case ELEMENTAL:
+                return new float[]{0.98f, 0.52f, 0.24f};
+            case DEFENSIVE:
+                return new float[]{0.42f, 0.82f, 0.98f};
+            case ARCANE:
+                return new float[]{0.72f, 0.52f, 0.98f};
+            case SPATIAL:
+                return new float[]{0.55f, 0.95f, 0.72f};
+            case ENHANCEMENT:
+                return new float[]{0.98f, 0.84f, 0.42f};
+            case SUMMONING:
+                return new float[]{0.62f, 0.90f, 0.88f};
+            case ILLUSION:
+                return new float[]{0.86f, 0.58f, 0.98f};
+            case FORBIDDEN:
+                return new float[]{0.95f, 0.32f, 0.42f};
+            default:
+                return new float[]{0.90f, 0.90f, 0.94f};
         }
-        if ("Defensive".equals(school)) {
-            return new float[]{0.42f, 0.82f, 0.98f};
-        }
-        if ("Arcane".equals(school)) {
-            return new float[]{0.72f, 0.52f, 0.98f};
-        }
-        if ("Spatial".equals(school)) {
-            return new float[]{0.55f, 0.95f, 0.72f};
-        }
-        return new float[]{0.90f, 0.90f, 0.94f};
+    }
+
+    /** First word of a spell's name, which is what fits under a slot. */
+    private static String shortName(String name) {
+        int space = name.indexOf(' ');
+        return space < 0 ? name : name.substring(0, space);
     }
 
     private void drawShardCounter(UiBatch b, World world) {

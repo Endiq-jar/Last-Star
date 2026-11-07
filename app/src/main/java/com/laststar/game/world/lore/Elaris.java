@@ -253,6 +253,11 @@ public final class Elaris {
     private Elaris() {
     }
 
+    /** The region array itself, for callers that index it directly. */
+    public static Region[] regions() {
+        return REGIONS;
+    }
+
     public static Region region(int index) {
         if (index < 0 || index >= REGIONS.length) {
             return REGIONS[0];

@@ -463,11 +463,20 @@ public final class SceneRenderer {
      * so the two kinds of pickup never pulse in step.</p>
      */
     private void drawWander(World world) {
-        if (wanderModelIndex < 0 || world.hasWander || world.wanderPosition == null) {
+        if (wanderModelIndex < 0) {
             return;
         }
-        Vec3 p = world.wanderPosition;
-        float bob = (float) Math.sin(world.worldTime * 1.6f) * 0.13f;
+        // Every lost page in the region, drawn as a smaller floating book with
+        // the same halo, so a player can spot one across a meadow.
+        for (int i = 0; i < world.lostPages.size(); i++) {
+            drawFoundPage(world, world.lostPages.get(i));
+        }
+    }
+
+    /** One lost page, bobbing and turning. */
+    private void drawFoundPage(World world, World.FoundPage page) {
+        Vec3 p = page.position;
+        float bob = (float) Math.sin(world.worldTime * 1.6f + page.spin * 0.01f) * 0.13f;
         float y = p.y + 0.55f + bob;
 
         // Halo first, additively, so it reads as a glow rather than a disc.
@@ -488,7 +497,7 @@ public final class SceneRenderer {
 
         modelMatrix.setMultiply(
                 Mat4.translation(p.x, y, p.z),
-                Mat4.rotationY(world.wanderSpin));
+                Mat4.rotationY(page.spin));
         tmp.setMultiply(frameViewProj, modelMatrix);
         sceneProgram.setMvp(tmp.m);
         sceneProgram.setModel(modelMatrix.m);

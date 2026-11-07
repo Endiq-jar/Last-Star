@@ -50,7 +50,7 @@ echo "==> compiling simulation + harness"
   @"$ROOT/build/test-sources.txt" \
   desktop/HeadlessTest.java desktop/PngWriter.java desktop/Raster.java \
   desktop/ScreenshotTool.java desktop/MenuPreview.java \
-  desktop/ModelLoaderFixture.java desktop/WanderTest.java
+  desktop/ModelLoaderFixture.java desktop/SystemsTest.java
 
 echo "==> checking GLSL ES 1.00 rules that a syntax parser cannot see"
 python3 tools/extract_shaders.py
@@ -67,7 +67,7 @@ echo "==> verifying the menu input path"
 "$ROOT/tools/input_path_test.sh"
 
 echo "==> verifying the Wander and its spells"
-"$JAVA_BIN" -cp "$OUT" WanderTest
+"$JAVA_BIN" -cp "$OUT" SystemsTest
 
 echo "==> running headless verification"
 "$JAVA_BIN" -cp "$OUT" HeadlessTest

@@ -81,6 +81,18 @@ public final class QuestLog {
         }
     }
 
+    /**
+     * Sets a consequence flag directly, for restoring a save.
+     *
+     * <p>Flags are normally earned by completing a quest, but a loaded save has
+     * to be able to put back the ones already earned without replaying them.</p>
+     */
+    public void setFlag(QuestCorpus.Consequence flag, boolean value) {
+        if (flag != null) {
+            flags[flag.ordinal()] = value;
+        }
+    }
+
     /** Whether a consequence flag has been earned. */
     public boolean has(QuestCorpus.Consequence flag) {
         return flags[flag.ordinal()];

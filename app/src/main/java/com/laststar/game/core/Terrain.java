@@ -1,5 +1,7 @@
 package com.laststar.game.core;
 
+import com.laststar.game.world.lore.Elaris;
+
 /**
  * Terrain height field, generated once per world and then queried in O(1) by
  * rendering, physics and gameplay code.
@@ -25,14 +27,36 @@ public final class Terrain {
     private final float cellSize;
 
     public Terrain(float size, int segments, long seed) {
+        this(size, segments, seed, null);
+    }
+
+    /**
+     * Builds a region's terrain.
+     *
+     * <p>The fourteen settlements are shaped differently on purpose: Frostmere
+     * is jagged and white, The Deep is a walled cavern with no water and no
+     * sky, Suncrest is a dune field. Those differences are generation
+     * parameters rather than a texture swap, so the ground the player walks on
+     * is genuinely a different surface.</p>
+     */
+    public static Terrain forRegion(Elaris.Region region, float size, int segments,
+                                    long seed) {
+        return new Terrain(size, segments, seed, region);
+    }
+
+    private Terrain(float size, int segments, long seed, Elaris.Region region) {
         this.size = size;
         this.segments = segments;
         this.cellSize = size / segments;
-        this.waterLevel = -0.55f;
+        this.region = region;
+        this.waterLevel = region == null ? -0.55f : region.waterLevel;
         this.heights = new float[(segments + 1) * (segments + 1)];
         this.blend = new byte[(segments + 1) * (segments + 1)];
         generate(seed);
     }
+
+    /** The region this terrain was built for, or null for the default. */
+    public final Elaris.Region region;
 
     private void generate(long seed) {
         Noise base = new Noise(seed);
@@ -55,8 +79,16 @@ public final class Terrain {
         float nx = wx * 0.0125f;
         float nz = wz * 0.0125f;
 
+        // Per-region shape. The default is the original world, so a Terrain
+        // built without a region behaves exactly as it always did.
+        float baseAmp = region == null ? 5.5f : region.baseAmp;
+        float ridgeAmp = region == null ? 21.0f : region.ridgeAmp;
+        float lakeAmount = region == null ? 3.2f : region.lakeDepth;
+        float plateauY = region == null ? 0.35f : region.plateauHeight;
+        float rimStart = region == null ? 0.30f : region.rimStart;
+
         // Rolling base terrain.
-        float h = base.fbm(nx, nz, 4, 2.02f, 0.5f) * 5.5f;
+        float h = base.fbm(nx, nz, 4, 2.02f, 0.5f) * baseAmp;
 
         // Foothills towards the rim. Deliberately moderate: shards spawn up to
         // 86 m out and the player has to walk to them, so the playable ground
@@ -64,8 +96,8 @@ public final class Terrain {
         // decorative range outside the map (see Geometry.mountainRange) -- they
         // need no collision, so they can be as huge as the view wants.
         float radial = (float) Math.sqrt(wx * wx + wz * wz) / (size * 0.5f);
-        float rim = Noise.smoothstep(0.30f, 0.92f, radial);
-        h += ridge.ridged(nx * 0.62f + 13.1f, nz * 0.62f - 7.7f, 4) * 21.0f * rim;
+        float rim = Noise.smoothstep(rimStart, 0.92f, radial);
+        h += ridge.ridged(nx * 0.62f + 13.1f, nz * 0.62f - 7.7f, 4) * ridgeAmp * rim;
 
         // Fine bumps for footstep variation.
         h += detail.fbm(wx * 0.05f, wz * 0.05f, 3, 2.11f, 0.45f) * 1.1f;
@@ -73,11 +105,15 @@ public final class Terrain {
         // Flatten the spawn plateau (radius ~9 m at the origin).
         float d = (float) Math.sqrt(wx * wx + wz * wz);
         float plateau = 1f - Noise.smoothstep(7f, 16f, d);
-        h = h * (1f - plateau) + plateau * 0.35f;
+        h = h * (1f - plateau) + plateau * plateauY;
 
         // Carve a lake basin in the north-east quadrant, then clamp above it.
-        float lake = base.lakeMask(nx * 1.15f - 2.4f, nz * 1.15f + 2.1f);
-        h -= lake * 3.2f;
+        // A region with no lake skips it, which is what gives The Deep its
+        // walled floor and Suncrest its dry dunes.
+        if (lakeAmount > 0.01f) {
+            float lake = base.lakeMask(nx * 1.15f - 2.4f, nz * 1.15f + 2.1f);
+            h -= lake * lakeAmount;
+        }
 
         return h;
     }

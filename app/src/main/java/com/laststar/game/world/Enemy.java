@@ -27,12 +27,29 @@ public final class Enemy extends Entity {
     public static final float AGGRO_RANGE = 24f;
     public static final float LEASH_RANGE = 52f;
 
+    /**
+     * The creature's name, from the region it was spawned in.
+     *
+     * <p>Hunts in the journal name a creature, so a kill has to be able to say
+     * what it was. Regions stock different Hollow creatures, which is what
+     * makes a hunt in Frostmere feel different from one in Suncrest.</p>
+     */
+    public String name = "HOLLOW WARDEN";
+
     public State state = State.IDLE;
     public float attackTimer;
     public float windupTimer;
     public boolean swingLanded;
     /** Seconds of stagger left; set when the player lands a hit. */
     public float staggerTimer;
+    /**
+     * Seconds of slowed movement left, from a spell that applies it.
+     *
+     * <p>Slowing is a different thing from staggering: a stagger stops the
+     * attack, a slow makes it harder to close the distance. Spells in the
+     * corpus use both, so the enemy tracks them separately.</p>
+     */
+    public float slowTimer;
     /** Animation phase, driven by movement speed. */
     public float animPhase;
     /** Bounds of the guard post; enemies drift back when too far away. */
@@ -61,6 +78,9 @@ public final class Enemy extends Entity {
      */
     public void update(float dt, Entity player, World world, HitListener onHit) {
         tickTimers(dt);
+        if (slowTimer > 0f) {
+            slowTimer = Math.max(0f, slowTimer - dt);
+        }
         if (!alive) {
             state = State.DEAD;
             velocity = Vec3.ZERO;
@@ -75,6 +95,7 @@ public final class Enemy extends Entity {
             return;
         }
 
+        float speedScale = slowTimer > 0f ? 0.45f : 1f;
         float dist = player.alive ? horizontalDistanceTo(player) : Float.MAX_VALUE;
         boolean playerInRange = dist < AGGRO_RANGE;
         boolean tooFarFromHome = position.distanceTo(spawn) > LEASH_RANGE;
@@ -116,7 +137,7 @@ public final class Enemy extends Entity {
             }
         } else {
             state = State.CHASE;
-            moveToward(player.position, MOVE_SPEED, dt);
+            moveToward(player.position, MOVE_SPEED * speedScale, dt);
         }
     }
 

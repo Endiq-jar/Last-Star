@@ -52,6 +52,7 @@ echo "==> compiling the fake GL driver and the render-path harness"
   app/src/main/java/com/laststar/game/gl/*.java \
   app/src/main/java/com/laststar/game/core/*.java \
   app/src/main/java/com/laststar/game/world/*.java \
+  app/src/main/java/com/laststar/game/world/lore/*.java \
   app/src/main/java/com/laststar/game/art/*.java \
   app/src/main/java/com/laststar/game/ui/UiRenderer.java \
   app/src/main/java/com/laststar/game/ui/UiBatch.java \
