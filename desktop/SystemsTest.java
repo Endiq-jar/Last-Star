@@ -1,4 +1,5 @@
 import com.laststar.game.core.Vec3;
+import com.laststar.game.world.CombatKit;
 import com.laststar.game.world.Enemy;
 import com.laststar.game.world.QuestLog;
 import com.laststar.game.world.SaveGame;
@@ -39,6 +40,7 @@ public final class SystemsTest {
         questCorpus();
         saveRoundTrip();
         regionTravel();
+        combatKit();
 
         System.out.println(checks + " checks, " + failures + " failures");
         if (failures > 0) {
@@ -393,6 +395,172 @@ public final class SystemsTest {
             }
         }
         return true;
+    }
+
+    // -- the blade ------------------------------------------------------------
+
+    private static void combatKit() {
+        System.out.println("CombatKit");
+        CombatKit kit = new CombatKit();
+
+        // A light swing starts, and its hit window opens partway through.
+        kit.update(0.016f, true, false, false, false, false, true);
+        check("a light press swings", kit.stance == CombatKit.Stance.LIGHT);
+        check("the first frame does not land", !kit.hitWindowOpen());
+        step(kit, 0.10f);
+        check("the hit window opens mid-swing", kit.hitWindowOpen());
+        check("a light swing has a range", kit.lastRange > 0f);
+
+        // Combos: three lights in sequence walk the chain and grow.
+        CombatKit combo = new CombatKit();
+        swingThrough(combo);
+        float one = combo.damageScale();
+        swingThrough(combo);
+        float two = combo.damageScale();
+        swingThrough(combo);
+        float three = combo.damageScale();
+        check("the combo escalates", three > two && two >= one);
+        check("the third hit staggers", combo.staggers());
+
+        // A heavy is slower and stronger than a light.
+        CombatKit heavy = new CombatKit();
+        holdHeavy(heavy, CombatKit.CHARGE_TIME * 0.5f);
+        releaseHeavy(heavy);
+        check("a short hold is a heavy, not a charge",
+                heavy.swing == CombatKit.Swing.CHARGED);
+        float shortCharge = heavy.damageScale();
+        CombatKit wound = new CombatKit();
+        holdHeavy(wound, CombatKit.CHARGE_FULL + 0.1f);
+        releaseHeavy(wound);
+        check("a long hold hits harder", wound.damageScale() > shortCharge);
+        check("a charged blow breaks guard", wound.breaksGuard());
+
+        // The dodge: i-frames are open, the perfect window is the front of it.
+        CombatKit dodge = new CombatKit();
+        dodge.update(0.016f, false, false, false, true, false, true);
+        check("a dodge dodges", dodge.stance == CombatKit.Stance.DODGE);
+        check("the dodge has i-frames", dodge.dodgeInvulnerable());
+        check("the perfect window is open at the start", dodge.perfectDodgeActive());
+        step(dodge, CombatKit.DODGE_PERFECT + 0.02f);
+        check("the perfect window closes early", !dodge.perfectDodgeActive());
+        check("the dodge is still rolling", dodge.dodgeInvulnerable());
+
+        // A perfect dodge opens the counter window and refunds Light.
+        CombatKit perfect = new CombatKit();
+        perfect.update(0.016f, false, false, false, true, false, true);
+        perfect.onIncomingBlow();
+        check("a perfect dodge opens a counter", perfect.counterWindow > 0f);
+        check("a perfect dodge is counted", perfect.perfectDodges == 1);
+
+        // A parry does the same, but only inside its window.
+        CombatKit parry = new CombatKit();
+        parry.update(0.016f, false, false, false, false, true, true);
+        check("a parry enters the stance", parry.stance == CombatKit.Stance.PARRY);
+        check("the parry window is open", parry.parryAbsorbs());
+        check("a blow is turned aside", parry.onIncomingBlow());
+        check("the parry is counted", parry.parries == 1);
+        check("a parry opens a counter", parry.counterWindow > 0f);
+
+        // A mistimed parry is the recovery, not the window.
+        CombatKit late = new CombatKit();
+        late.update(0.016f, false, false, false, false, true, true);
+        step(late, CombatKit.PARRY_TIME);
+        check("a late parry catches nothing", !late.parryAbsorbs());
+        check("a late parry is not counted", !late.onIncomingBlow());
+
+        // A dodge late in its roll is neither i-frame nor perfect.
+        CombatKit lateDodge = new CombatKit();
+        lateDodge.update(0.016f, false, false, false, true, false, true);
+        step(lateDodge, CombatKit.DODGE_TIME + 0.05f);
+        check("the roll ends", lateDodge.stance == CombatKit.Stance.IDLE);
+
+        // A chain of hits earns the finisher.
+        CombatKit chain = new CombatKit();
+        for (int i = 0; i < 5; i++) {
+            chain.onHitLanded(10f, false);
+        }
+        check("five hits is not yet a finisher", !chain.finisherReady);
+        chain.onHitLanded(10f, false);
+        check("six hits earn the finisher", chain.finisherReady);
+        chain.update(0.016f, true, false, false, false, false, true);
+        check("the finisher swings", chain.swing == CombatKit.Swing.FINISHER);
+        check("the finisher is worth the wait",
+                chain.damageScale() > CombatKit.CHARGED_DAMAGE * 0.9f);
+        check("the finisher is spent", !chain.finisherReady);
+
+        // Being hit resets the chain.
+        chain.onHitLanded(10f, false);
+        chain.onPlayerHurt();
+        check("a hit breaks the chain", chain.chain == 0 && !chain.finisherReady);
+
+        // Casting is allowed while moving but not mid-roll.
+        CombatKit casting = new CombatKit();
+        check("a resting player can cast", casting.canCast());
+        casting.update(0.016f, false, false, false, true, false, true);
+        check("a rolling player cannot cast", !casting.canCast());
+        step(casting, CombatKit.DODGE_TIME + 0.1f);
+        check("the player can cast again", casting.canCast());
+
+        // Aerial: a light press in the air still swings, and the window opens
+        // partway through it just as a ground swing's does.
+        CombatKit air = new CombatKit();
+        air.update(0.016f, true, false, false, false, false, false);
+        check("an aerial press swings", air.stance == CombatKit.Stance.LIGHT);
+        check("an aerial swing starts without landing", !air.hitWindowOpen());
+        stepAir(air, 0.12f);
+        check("an aerial swing has a hit window", air.hitWindowOpen());
+    }
+
+    /**
+     * Runs one light press and lets the swing play out.
+     *
+     * <p>The swing lasts longer than its cooldown, so waiting for the cooldown
+     * alone leaves the previous stance still running and the next press is
+     * swallowed. Waiting for the stance to clear is what a player does.</p>
+     */
+    private static void swingThrough(CombatKit kit) {
+        for (int i = 0; i < 60 && (kit.stance != CombatKit.Stance.IDLE
+                || kit.cooldown > 0f); i++) {
+            step(kit, 0.016f);
+        }
+        kit.update(0.016f, true, false, false, false, false, true);
+    }
+
+    private static void holdHeavy(CombatKit kit, float seconds) {
+        kit.update(0.016f, false, true, true, false, false, true);
+        float t = 0f;
+        while (t < seconds) {
+            stepHeld(kit, 0.016f);
+            t += 0.016f;
+        }
+    }
+
+    private static void releaseHeavy(CombatKit kit) {
+        kit.update(0.016f, false, false, false, false, false, true);
+    }
+
+    private static void step(CombatKit kit, float seconds) {
+        float t = 0f;
+        while (t < seconds) {
+            kit.update(0.016f, false, false, false, false, false, true);
+            t += 0.016f;
+        }
+    }
+
+    private static void stepAir(CombatKit kit, float seconds) {
+        float t = 0f;
+        while (t < seconds) {
+            kit.update(0.016f, false, false, false, false, false, false);
+            t += 0.016f;
+        }
+    }
+
+    private static void stepHeld(CombatKit kit, float seconds) {
+        float t = 0f;
+        while (t < seconds) {
+            kit.update(0.016f, false, false, true, false, false, true);
+            t += 0.016f;
+        }
     }
 
     // -- the save -------------------------------------------------------------

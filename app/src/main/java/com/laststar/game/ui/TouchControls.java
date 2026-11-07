@@ -37,8 +37,13 @@ public final class TouchControls {
 
     // --- buttons -----------------------------------------------------
     public final Button attack = new Button(636f, 330f, 33f);
-    public final Button jump = new Button(566f, 356f, 26f);
-    public final Button sprint = new Button(690f, 268f, 24f);
+    /** The heavy: tap to swing, hold to charge. Smaller and inboard of ATTACK. */
+    public final Button heavy = new Button(690f, 372f, 24f);
+    /** Dodge, and the parry that shares its corner of the screen. */
+    public final Button dodge = new Button(578f, 384f, 22f);
+    public final Button parry = new Button(690f, 320f, 20f);
+    public final Button jump = new Button(566f, 336f, 24f);
+    public final Button sprint = new Button(690f, 268f, 22f);
     public final Button pause = new Button(196f, 26f, 15f);
     public final Button sound = new Button(236f, 26f, 15f);
     /**
@@ -56,6 +61,9 @@ public final class TouchControls {
     };
 
     private int attackPointer = -1;
+    private int heavyPointer = -1;
+    private int dodgePointer = -1;
+    private int parryPointer = -1;
     private int jumpPointer = -1;
     private int sprintPointer = -1;
     private int pausePointer = -1;
@@ -164,6 +172,27 @@ public final class TouchControls {
             out.attackPressed = true;
             return;
         }
+        // The heavy is checked before dodge and parry because it is the largest
+        // of the three and the one a thumb is most likely to land on.
+        if (heavy.contains(x, y) && heavyPointer < 0) {
+            heavyPointer = id;
+            heavy.pressAmount = 1f;
+            out.heavyHeld = true;
+            out.heavyPressed = true;
+            return;
+        }
+        if (dodge.contains(x, y) && dodgePointer < 0) {
+            dodgePointer = id;
+            dodge.pressAmount = 1f;
+            out.dodgePressed = true;
+            return;
+        }
+        if (parry.contains(x, y) && parryPointer < 0) {
+            parryPointer = id;
+            parry.pressAmount = 1f;
+            out.parryPressed = true;
+            return;
+        }
         if (jump.contains(x, y) && jumpPointer < 0) {
             jumpPointer = id;
             jump.pressAmount = 1f;
@@ -246,6 +275,24 @@ public final class TouchControls {
             out.attackHeld = false;
             return;
         }
+        if (id == heavyPointer) {
+            heavyPointer = -1;
+            heavy.pressAmount = 0f;
+            // Releasing is what swings a charged heavy, so the release edge is
+            // what the world watches.
+            out.heavyHeld = false;
+            return;
+        }
+        if (id == dodgePointer) {
+            dodgePointer = -1;
+            dodge.pressAmount = 0f;
+            return;
+        }
+        if (id == parryPointer) {
+            parryPointer = -1;
+            parry.pressAmount = 0f;
+            return;
+        }
         if (id == jumpPointer) {
             jumpPointer = -1;
             jump.pressAmount = 0f;
@@ -254,6 +301,13 @@ public final class TouchControls {
         if (id == sprintPointer) {
             sprintPointer = -1;
             sprint.pressAmount = 0f;
+        heavy.pressAmount = 0f;
+        dodge.pressAmount = 0f;
+        parry.pressAmount = 0f;
+        heavyPointer = -1;
+        dodgePointer = -1;
+        parryPointer = -1;
+        out.heavyHeld = false;
             out.sprintHeld = false;
             return;
         }
@@ -298,6 +352,13 @@ public final class TouchControls {
         attack.pressAmount = 0f;
         jump.pressAmount = 0f;
         sprint.pressAmount = 0f;
+        heavy.pressAmount = 0f;
+        dodge.pressAmount = 0f;
+        parry.pressAmount = 0f;
+        heavyPointer = -1;
+        dodgePointer = -1;
+        parryPointer = -1;
+        out.heavyHeld = false;
         pause.pressAmount = 0f;
         sound.pressAmount = 0f;
         out.reset();
@@ -323,12 +384,18 @@ public final class TouchControls {
         if (leftHanded) {
             lookSensitivity = 0.16f;
             attack.x = 84f;
+            heavy.x = 30f;
+            dodge.x = 142f;
+            parry.x = 30f;
             jump.x = 154f;
             sprint.x = 30f;
             pause.x = 524f;
             sound.x = 564f;
         } else {
             attack.x = 636f;
+            heavy.x = 690f;
+            dodge.x = 578f;
+            parry.x = 690f;
             jump.x = 566f;
             sprint.x = 690f;
             pause.x = 196f;

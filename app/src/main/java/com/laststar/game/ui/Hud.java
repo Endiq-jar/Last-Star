@@ -60,7 +60,7 @@ public final class Hud {
         boolean controlsVisible = world.phase == World.Phase.PLAYING
                 || world.phase == World.Phase.DEFEAT;
         if (controlsVisible) {
-            drawControls(b, controls);
+            drawControls(b, world, controls);
             drawSpellSlots(b, world, controls);
         }
         drawMessages(b, world);
@@ -280,7 +280,7 @@ public final class Hud {
         }
     }
 
-    private void drawControls(UiBatch b, TouchControls controls) {
+    private void drawControls(UiBatch b, World world, TouchControls controls) {
         // Movement stick.
         float baseX = controls.stickBaseX;
         float baseY = controls.stickBaseY;
@@ -293,8 +293,34 @@ public final class Hud {
                 1f, 0.88f, 0.55f, 0.95f);
 
         drawButton(b, controls.attack, 1f, 0.42f, 0.30f, "HIT");
+        drawButton(b, controls.heavy, 0.98f, 0.62f, 0.24f, "HVY");
+        drawButton(b, controls.dodge, 0.62f, 0.90f, 0.72f, "DGE");
+        drawButton(b, controls.parry, 0.72f, 0.78f, 1f, "PRY");
         drawButton(b, controls.jump, 0.40f, 0.78f, 1f, "JMP");
         drawButton(b, controls.sprint, 0.95f, 0.80f, 0.35f, "RUN");
+
+        // The charge meter sits on the heavy button, where the thumb already
+        // is, rather than in a bar somewhere across the screen.
+        if (world.combat.stance == com.laststar.game.world.CombatKit.Stance.CHARGING) {
+            float frac = world.combat.chargeFraction;
+            float r = controls.heavy.radius;
+            b.circle(controls.heavy.x, controls.heavy.y, r * 0.94f, 24,
+                    1f, 0.72f, 0.26f, 0.18f + frac * 0.5f);
+            if (frac >= 1f) {
+                // Fully wound: a ring, so the player knows the release is now.
+                b.ring(controls.heavy.x, controls.heavy.y, r * 1.25f, r * 1.05f, 20,
+                        1f, 0.86f, 0.42f, 0.9f);
+            }
+        }
+
+        // The counter window after a perfect dodge, drawn on the parry button
+        // because that is the button that will spend it.
+        if (world.combat.counterWindow > 0f) {
+            float r = controls.parry.radius * 1.28f;
+            b.ring(controls.parry.x, controls.parry.y, r, r * 0.8f, 18,
+                    1f, 0.90f, 0.55f, 0.55f
+                            + 0.35f * (float) Math.sin(world.worldTime * 18f));
+        }
 
         // Pause icon.
         float px = controls.pause.x;

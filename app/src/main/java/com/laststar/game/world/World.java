@@ -72,6 +72,8 @@ public final class World {
     public final List<Projectile> projectiles = new ArrayList<>();
     /** The spell-book and the player's Light. */
     public final SpellBook spells = new SpellBook();
+    /** The blade: timing, combos, parry, dodge, finishers. */
+    public final CombatKit combat = new CombatKit();
     /** The journal, and the thing that advances it. */
     public final QuestLog quests = new QuestLog();
     /** Which of the fourteen settlements the player is standing in. */
@@ -592,18 +594,48 @@ public final class World {
         return terrain.heightAt(x, z);
     }
 
+    /**
+     * Drives the blade.
+     *
+     * <p>The kit decides what stance the player is in and when a swing's damage
+     * lands; the world only asks it whether the hit window is open and resolves
+     * the swing if so. That keeps the timing in one testable place.</p>
+     */
     private void handleCombat(float dt, InputState in) {
-        if (!player.canAttack()) {
-            return;
+        boolean dodgeNow = in.dodgePressed && combat.stance != CombatKit.Stance.DODGE;
+        if (dodgeNow) {
+            combat.dodgeYaw = player.yaw;
         }
-        if (in.attackPressed || (in.attackHeld && player.attackCooldown <= 0.12f && player.attackAnim <= 0f)) {
-            // require an edge for held-fire so taps feel deterministic
-            if (!in.attackPressed && !in.attackHeld) {
-                return;
+
+        combat.update(dt, in.attackPressed, in.heavyPressed, in.heavyHeld,
+                in.dodgePressed, in.parryPressed, player.onGround);
+
+        // The dodge moves the player along the line they committed to, so it
+        // cannot be steered mid-roll into a safe corner.
+        if (combat.stance == CombatKit.Stance.DODGE) {
+            float step = CombatKit.DODGE_DISTANCE / CombatKit.DODGE_TIME * dt;
+            Vec3 dir = new Vec3((float) Math.sin(Math.toRadians(combat.dodgeYaw)), 0f,
+                    (float) Math.cos(Math.toRadians(combat.dodgeYaw)));
+            Vec3 next = player.position.add(dir.mul(step));
+            float half = terrain.size * 0.5f - 2f;
+            next = next.clampXZ(half);
+            next = next.withY(groundHeight(next.x, next.z));
+            player.position = next;
+        }
+
+        // A fully-wound charge hums; the renderer reads chargeFraction.
+        if (combat.stance == CombatKit.Stance.CHARGING) {
+            shakeAmount = Math.max(shakeAmount, combat.chargeFraction * 0.25f);
+        }
+
+        if (combat.hitWindowOpen()) {
+            combat.swingResolved = true;
+            int hits = resolveBladeSwing();
+            if (hits > 0) {
+                shakeAmount = Math.min(1f, shakeAmount
+                        + (combat.staggers() ? 0.42f : 0.18f));
+                hitStop = combat.staggers() ? 0.07f : 0.04f;
             }
-            player.startAttack();
-            shakeAmount = Math.min(1f, shakeAmount + 0.18f);
-            resolveMeleeHit();
         }
     }
 
@@ -1102,6 +1134,59 @@ public final class World {
         return best;
     }
 
+    /**
+     * Resolves the blade swing whose hit window is open.
+     *
+     * <p>Range and arc come from the kit, so a charged blow reaches further
+     * than a light one and a heavy sweeps wider. Aerial swings reach down as
+     * well as forward, which is what makes jumping at a Warden worthwhile.</p>
+     */
+    private int resolveBladeSwing() {
+        int hits = 0;
+        Vec3 origin = player.centre();
+        Vec3 facing = new Vec3((float) Math.sin(Math.toRadians(player.yaw)), 0f,
+                (float) Math.cos(Math.toRadians(player.yaw)));
+        float reach = combat.lastRange + (player.onGround ? 0f : 1.2f);
+        float base = Player.MELEE_DAMAGE * combat.damageScale();
+        float arc = combat.staggers()
+                ? Player.MELEE_ARC_DEGREES * 0.5f + 30f
+                : Player.MELEE_ARC_DEGREES * 0.5f;
+
+        for (int i = 0; i < enemies.size(); i++) {
+            Enemy e = enemies.get(i);
+            if (!e.alive) {
+                continue;
+            }
+            Vec3 toEnemy = e.centre().sub(origin);
+            if (!player.onGround) {
+                // Aerial: the vertical allowance is what makes it work.
+                if (toEnemy.y > CombatKit.AERIAL_REACH_UP
+                        || toEnemy.y < -CombatKit.AERIAL_REACH_DOWN) {
+                    continue;
+                }
+            }
+            if (toEnemy.horizontalLength() > reach + e.radius) {
+                continue;
+            }
+            Vec3 flat = toEnemy.normalizedXZ();
+            float dot = flat.dot(facing);
+            float angle = (float) Math.toDegrees(Math.acos(Noise.clamp(dot, -1f, 1f)));
+            if (angle > arc) {
+                continue;
+            }
+            boolean wasAlive = e.alive;
+            damageEnemy(e, base);
+            if (combat.staggers()) {
+                e.staggerTimer = Math.max(e.staggerTimer, combat.staggerSeconds());
+            } else {
+                e.staggerTimer = Math.max(e.staggerTimer, 0.18f);
+            }
+            hits++;
+            combat.onHitLanded(base, wasAlive && !e.alive);
+        }
+        return hits;
+    }
+
     /** Damages every enemy inside the melee cone. */
     public int resolveMeleeHit() {
         int hits = 0;
@@ -1156,14 +1241,51 @@ public final class World {
         }
     };
 
+    /**
+     * An enemy's blow landing.
+     *
+     * <p>This is where the kit earns its place: a parry turns the blow back on
+     * the attacker, a perfect dodge absorbs it and refunds Light, and only a
+     * blow that gets through both events shakes the screen.</p>
+     */
     private void onEnemyHit(Enemy source, Entity target, float damage) {
-        if (target == player) {
-            player.damage(damage);
-            shakeAmount = Math.min(1f, shakeAmount + 0.55f);
-            if (!player.alive) {
-                onPlayerDeath();
-            }
+        if (target != player) {
+            return;
         }
+        boolean perfectDodging = combat.perfectDodgeActive();
+        boolean parried = combat.onIncomingBlow();
+        if (parried) {
+            // The kit counts its own parries; the world only reacts.
+            // The attacker is opened up and takes the blow it threw.
+            source.staggerTimer = Math.max(source.staggerTimer, 1.0f);
+            damageEnemy(source, damage * 0.5f);
+            shakesSmall();
+            return;
+        }
+        if (perfectDodging) {
+            // A perfect dodge is free: no damage, and Light back for the
+            // counter that the window just opened.
+            spells.light = Math.min(spells.lightCapacity,
+                    spells.light + CombatKit.PERFECT_DODGE_LIGHT);
+            shakesSmall();
+            return;
+        }
+        if (combat.dodgeInvulnerable()) {
+            // A normal dodge still avoids the blow, just without the reward.
+            return;
+        }
+        player.damage(damage);
+        combat.onPlayerHurt();
+        shakeAmount = Math.min(1f, shakeAmount + 0.55f);
+        if (!player.alive) {
+            onPlayerDeath();
+        }
+    }
+
+    /** A short, cheap shake for the small victories. */
+    private void shakesSmall() {
+        shakeAmount = Math.min(1f, shakeAmount + 0.18f);
+        hitStop = Math.max(hitStop, 0.03f);
     }
 
     private void updateShards(float dt) {

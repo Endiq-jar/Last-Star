@@ -18,6 +18,12 @@ public final class InputState {
     /** Buttons: rising edge is reported separately so taps are never lost. */
     public boolean attackHeld;
     public boolean attackPressed;
+    /** The heavy button: held to charge, released to swing. */
+    public boolean heavyHeld;
+    public boolean heavyPressed;
+    /** Dodge, and parry (which becomes a counter inside a perfect-dodge window). */
+    public boolean dodgePressed;
+    public boolean parryPressed;
     public boolean jumpPressed;
     public boolean sprintHeld;
     public boolean interactPressed;
@@ -34,9 +40,11 @@ public final class InputState {
     public void clearFrameEdges() {
         castSlot = -1;
         attackPressed = false;
+        heavyPressed = false;
+        dodgePressed = false;
+        parryPressed = false;
         jumpPressed = false;
         interactPressed = false;
-        castSlot = -1;
         lookX = 0f;
         lookY = 0f;
     }
@@ -48,6 +56,10 @@ public final class InputState {
         lookY = 0f;
         attackHeld = false;
         attackPressed = false;
+        heavyHeld = false;
+        heavyPressed = false;
+        dodgePressed = false;
+        parryPressed = false;
         jumpPressed = false;
         sprintHeld = false;
         interactPressed = false;

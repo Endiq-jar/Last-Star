@@ -842,10 +842,17 @@ public final class HeadlessTest {
         float heading = target.position.sub(w.player.position).headingDegrees();
         w.player.yaw = heading;
 
+        // A swing lands a third of the way into its animation rather than on
+        // the press, so the test has to let the swing play. That delay is the
+        // point of the kit: a blow that connects on frame one has no weight.
         float hpBefore = target.health;
         in.attackPressed = true;
         w.update(1f / 60f, in);
         in.attackPressed = false;
+        check(target.health == hpBefore, "a swing does not land on the press");
+        for (int i = 0; i < 20; i++) {
+            w.update(1f / 60f, in);
+        }
         check(target.health < hpBefore, "melee damages an enemy in front");
 
         // Enemy behind should not be hit.
