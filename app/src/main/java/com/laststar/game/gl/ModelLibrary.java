@@ -52,7 +52,17 @@ public final class ModelLibrary {
     public static final int DOOR = 21;
     public static final int FENCE = 22;
 
-    public static final int ROLE_COUNT = 23;
+    /**
+     * The Wander: a single lore object, never part of a scatter pool.
+     *
+     * <p>It used to share {@link #PLANT}, which meant the ground-cover
+     * scatterer treated it as a shrub and put ninety copies of the world's
+     * most important book across the meadow. A role of its own keeps it out of
+     * every pool by construction.</p>
+     */
+    public static final int WANDER = 23;
+
+    public static final int ROLE_COUNT = 24;
 
     /** One imported prop. */
     public static final class Model {

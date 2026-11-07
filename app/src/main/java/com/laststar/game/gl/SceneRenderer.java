@@ -45,6 +45,8 @@ public final class SceneRenderer {
 
     private Mesh terrainMesh;
     private Mesh waterMesh;
+    /** Ground fan beyond the playable map, under the mountain ring. */
+    private Mesh skirtMesh;
     private Mesh sphereMesh;
     private Mesh shardMesh;
     private Mesh particleMesh;
@@ -87,6 +89,12 @@ public final class SceneRenderer {
 
         terrainMesh = toMesh(Geometry.terrain(world.terrain));
         waterMesh = toMesh(Geometry.waterPlane(world.terrain.size * 1.4f, 44, world.terrain.waterLevel));
+        // Starts inside the terrain so there is no crack at the seam, and runs
+        // out past the near mountain ring so its feet land on ground.
+        skirtMesh = toMesh(Geometry.distantGround(
+                world.terrain.size * 0.48f, 620f, 64,
+                world.terrain.heightAt(world.terrain.size * 0.48f, 0f) - 0.6f,
+                26f, 0.30f, 0.40f, 0.32f));
 
 
         sphereMesh = toMesh(Geometry.sphere(1f, 10, 14, 1f, 1f, 1f, 1f));
@@ -212,6 +220,7 @@ public final class SceneRenderer {
         sceneProgram.setFloat("uWaveAmp", 0f);
         drawMesh(terrainMesh);
 
+        drawSkirt(camera);
         drawMountains(camera);
         drawProps(world, camera);
         drawShards(world);
@@ -225,6 +234,24 @@ public final class SceneRenderer {
         drawParticles(world, camera);
 
         GLES20.glDisable(GLES20.GL_DEPTH_TEST);
+    }
+
+    /**
+     * Draws the ground beyond the map.
+     *
+     * <p>Like the range it follows the camera in X/Z, except it is pinned to
+     * the map centre: it has to stay welded to the terrain edge, and the
+     * terrain does not move. It is a single flat fan, so the cost is one draw.</p>
+     */
+    private void drawSkirt(Camera camera) {
+        modelMatrix.identity();
+        tmp.setMultiply(frameViewProj, modelMatrix);
+        sceneProgram.setMvp(tmp.m);
+        sceneProgram.setModel(modelMatrix.m);
+        sceneProgram.setTintAmount(0f);
+        sceneProgram.setEmissive(0f);
+        sceneProgram.setFloat("uWaveAmp", 0f);
+        drawMesh(skirtMesh);
     }
 
     /**
@@ -273,8 +300,12 @@ public final class SceneRenderer {
 
         // Landmarks first: towers and walls are the silhouettes you navigate by,
         // so they get the longest draw distance.
+        // Landmarks keep their own distance because they are not all the same
+        // kind of thing: a tent is 300 m of interesting, a mountain ring at
+        // 430 m is culled by that and pops out of the horizon as you walk.
         for (int i = 0; i < props.landmarks.size(); i++) {
-            drawProp(props.landmarks.get(i), 300f, camX, camZ);
+            PropPlanner.Instance in = props.landmarks.get(i);
+            drawProp(in, Math.max(300f, drawDistance(in.model)), camX, camZ);
         }
 
         PropPlanner.Grid grid = props.grid;
@@ -317,7 +348,12 @@ public final class SceneRenderer {
     private float drawDistance(int modelIndex) {
         switch (models.get(modelIndex).role) {
             case ModelLibrary.GRASS:
+                // Grass is 0.8 m tall and the weather shader turns the terrain
+                // itself green, so drawing it past twenty metres costs a
+                // thousand draw calls to render detail no one can resolve.
+                return 22f;
             case ModelLibrary.FLOWER:
+                return 26f;
             case ModelLibrary.MUSHROOM:
                 return 30f;
             case ModelLibrary.PLANT:
@@ -328,8 +364,11 @@ public final class SceneRenderer {
             case ModelLibrary.LOG:
             case ModelLibrary.STUMP:
                 return 135f;
-            case ModelLibrary.CLIFF:
             case ModelLibrary.HILL:
+                // The mountain rings sit out past 400 m; the far plane is at
+                // 1400 m, so this is what keeps the whole horizon drawn.
+                return 900f;
+            case ModelLibrary.CLIFF:
                 return 200f;
             default:
                 return 160f;

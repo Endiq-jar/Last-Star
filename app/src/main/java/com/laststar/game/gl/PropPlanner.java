@@ -139,23 +139,321 @@ public final class PropPlanner {
         grid = new Grid(terrain.size / cols, -terrain.size * 0.5f, -terrain.size * 0.5f,
                 cols, cols);
 
-        // Attempt counts are high on purpose: the scatterer rejects anything
-        // that lands in water, on a cliff, too close to another prop or inside a
-        // landmark's clearing, so roughly a third of the attempts survive.
+        // Order is load-bearing, not cosmetic: the grid doubles as the overlap
+        // test, so whatever goes in first wins its ground. Landmarks and the
+        // big silhouettes are placed before the ground cover, and the ground
+        // cover is ordered largest-first, otherwise a bush scattered after
+        // seventeen thousand grass clumps finds every candidate blocked and
+        // quietly never appears. Attempt counts are high for the same reason:
+        // water, slope, spawn clearance and overlaps reject most candidates.
+        buildLandmarks(models, terrain, seed);
+        buildRidges(models, terrain, seed);
+        buildPeaks(models, terrain, seed);
+        buildPackMountains(models, terrain, seed);
+        buildPackBridges(models, terrain, seed);
+
         scatter(models, terrain, seed, ModelLibrary.TREE, 380, 6.5f, 15f, true);
         scatter(models, terrain, seed + 11, ModelLibrary.ROCK, 210, 3.0f, 7f, true);
         scatter(models, terrain, seed + 23, ModelLibrary.PLANT, 760, 2.0f, 8f, true);
-        scatter(models, terrain, seed + 37, ModelLibrary.GRASS, 2200, 1.35f, 3f, true);
-        scatter(models, terrain, seed + 41, ModelLibrary.FLOWER, 900, 1.5f, 4f, true);
         scatter(models, terrain, seed + 53, ModelLibrary.MUSHROOM, 260, 1.6f, 6f, true);
         scatter(models, terrain, seed + 67, ModelLibrary.LOG, 110, 4.0f, 10f, true);
         scatter(models, terrain, seed + 71, ModelLibrary.STUMP, 55, 3.2f, 8f, true);
         scatter(models, terrain, seed + 83, ModelLibrary.CLIFF, 150, 7.0f, 22f, false);
         scatter(models, terrain, seed + 97, ModelLibrary.HILL, 24, 15f, 36f, false);
 
-        buildLandmarks(models, terrain, seed);
-        buildRidges(models, terrain, seed);
-        buildPeaks(models, terrain, seed);
+        // The imported pack, woven in with the procedural kit.
+        buildPackTrees(models, terrain, seed);
+        buildPackGroundCover(models, terrain, seed);
+
+        // Grass and flowers go on last of all. They have the smallest gap
+        // between them, so they are the layer that fills whatever space is
+        // left rather than the layer everything else has to work around.
+        scatter(models, terrain, seed + 37, ModelLibrary.GRASS, 9000, 0.55f, 3f, true);
+        scatter(models, terrain, seed + 41, ModelLibrary.FLOWER, 4200, 0.9f, 4f, true);
+    }
+
+
+    // ------------------------------------------------------ imported pack
+
+    /** Finds the model index for a name, or -1 when the set has no such model. */
+    private static int indexOf(ModelLibrary models, String name) {
+        for (int i = 0; i < models.size(); i++) {
+            if (models.get(i).name.equals(name)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Raises the imported mountain across the whole horizon.
+     *
+     * <p>The procedural range behind this is a backdrop that follows the
+     * camera, which reads correctly at the skyline but cannot be walked
+     * towards. These are real meshes standing on the real terrain, in two
+     * rings, so the mountains have parallax, catch the light and get properly
+     * hazed by distance as the player crosses the map.</p>
+     */
+    private void buildPackMountains(ModelLibrary models, Terrain terrain, long seed) {
+        int index = indexOf(models, "pk_mountain");
+        if (index < 0) {
+            return;
+        }
+        ModelLibrary.Model m = models.get(index);
+        // The model is 483 m wide for every 260 m of height: about 1.86:1. So
+        // height and footprint are the same decision. Sizing by height alone
+        // put the foot of a 260 m peak 24 m from the centre of the map, which
+        // drapes a mountainside over the whole playable area. Each ring is
+        // sized so the visible foot lands beyond the map edge and the peak
+        // still fills a good part of the sky.
+        Random r = new Random(seed + 9091);
+        // {centre distance, spread, peaks, min height, max height}
+        float[][] rings = {
+                {300f, 40f, 12, 112f, 152f},
+                {430f, 60f, 10, 190f, 250f}
+        };
+        for (int ringIndex = 0; ringIndex < rings.length; ringIndex++) {
+            float[] ring = rings[ringIndex];
+            float centre = ring[0], spread = ring[1];
+            int count = (int) ring[2];
+            float minH = ring[3], maxH = ring[4];
+            for (int k = 0; k < count; k++) {
+                // Offset each ring half a step so the second ring's peaks fall
+                // in the gaps of the first instead of directly behind them.
+                float ang = (float) ((k + ringIndex * 0.5f) * Math.PI * 2.0 / count)
+                        + (r.nextFloat() - 0.5f) * 0.26f;
+                float dist = centre + (r.nextFloat() - 0.5f) * spread;
+                float x = (float) Math.cos(ang) * dist;
+                float z = (float) Math.sin(ang) * dist;
+                float metres = minH + r.nextFloat() * (maxH - minH);
+                // Bed the base into the ground skirt. The foot is hidden by the
+                // skirt's own slope, so the seam where the model ends is never
+                // on screen.
+                float base = -(metres * 0.10f) - 6f;
+                landmarks.add(new Instance(index, x, base, z,
+                        r.nextFloat() * 360f, m.scaleTo(metres),
+                        // Snow and haze creeping down from the summit.
+                        0.88f + ringIndex * 0.04f, 0.92f + ringIndex * 0.03f,
+                        1.05f, 0.28f + ringIndex * 0.18f + r.nextFloat() * 0.14f));
+            }
+        }
+    }
+
+    /**
+     * Spans bridges across the water wherever a dry shore exists on both sides.
+     *
+     * <p>The world is a lake basin, so a crossing needs the water to be
+     * genuinely interrupted by land rather than just shallow: the samples at
+     * each end are required to be well clear of the water line, or the bridge
+     * ends in mid-air over the shallows.</p>
+     */
+    private void buildPackBridges(ModelLibrary models, Terrain terrain, long seed) {
+        int index = indexOf(models, "pk_bridge");
+        if (index < 0) {
+            return;
+        }
+        ModelLibrary.Model m = models.get(index);
+        // Which axis of the bridge is its length is not obvious from its
+        // bounding box, so the span is driven by the water it has to cross
+        // rather than by the model's height.
+        float halfLength = 7f;
+
+        // The terrain holds one lake, 27 m to 66 m across depending on where
+        // you cut it. A fixed-size bridge cannot span that, so crossings are
+        // found by cutting the lake with many lines and keeping the narrowest
+        // wet run each line passes through.
+        Random r = new Random(seed + 7717);
+        int placed = 0;
+        float[][] found = new float[12][];
+        for (int attempt = 0; attempt < 1400 && placed < 4; attempt++) {
+            float px = -60f + r.nextFloat() * 80f;
+            float pz = -40f + r.nextFloat() * 80f;
+            float ang = (float) (r.nextDouble() * Math.PI);
+            float dx = (float) Math.cos(ang);
+            float dz = (float) Math.sin(ang);
+
+            // Walk the line and track the longest contiguous wet stretch.
+            float bestLen = 0f, bestMid = 0f;
+            float runStart = 0f, runLen = 0f;
+            boolean inWater = false;
+            for (float d = -55f; d <= 55f; d += 0.8f) {
+                float h = terrain.heightAt(px + dx * d, pz + dz * d);
+                if (h < terrain.waterLevel) {
+                    if (!inWater) {
+                        inWater = true;
+                        runStart = d;
+                        runLen = 0f;
+                    }
+                    runLen = d - runStart;
+                } else if (inWater) {
+                    inWater = false;
+                    if (runLen > bestLen) {
+                        bestLen = runLen;
+                        bestMid = runStart + runLen * 0.5f;
+                    }
+                }
+            }
+            // Too short is a puddle; too long cannot be spanned by any fair
+            // stretch of the model. The window also has to end on dry ground
+            // at both ends, or the bridge ends in the shallows.
+            if (bestLen < 9f || bestLen > 34f) {
+                continue;
+            }
+            float cx = px + dx * bestMid;
+            float cz = pz + dz * bestMid;
+            boolean dryEnds = true;
+            for (int side = -1; side <= 1 && dryEnds; side += 2) {
+                float ex = cx + dx * (bestLen * 0.5f + 3.2f) * side;
+                float ez = cz + dz * (bestLen * 0.5f + 3.2f) * side;
+                if (terrain.heightAt(ex, ez) < terrain.waterLevel + 0.30f
+                        || terrain.slopeAt(ex, ez) > 0.55f) {
+                    dryEnds = false;
+                }
+            }
+            if (!dryEnds || blocked(cx, cz, 12f)) {
+                continue;
+            }
+            // Reject a crossing that lands on top of one already placed.
+            boolean clash = false;
+            for (int i = 0; i < placed; i++) {
+                float ddx = found[i][0] - cx;
+                float ddz = found[i][1] - cz;
+                if (ddx * ddx + ddz * ddz < 26f * 26f) {
+                    clash = true;
+                }
+            }
+            if (clash) {
+                continue;
+            }
+            found[placed] = new float[]{cx, cz};
+            placed++;
+
+            // Span the water plus two metres of footing on each bank, and let
+            // the deck rise gently out of the water rather than being scaled
+            // from the model's height.
+            float span = bestLen + 4.5f;
+            float scale = span / (halfLength * 2f);
+            // Keep the arch from turning into a cathedral: past about 2.2x the
+            // rise reads as a wall rather than a bridge.
+            scale = Math.min(scale, 2.2f);
+            float deck = terrain.waterLevel + 0.10f;
+            // The model's deck runs along its local Z. rotationY sends local +Z
+            // to (sin yaw, cos yaw), so the yaw that aligns the deck with this
+            // crossing is atan2(dx, dz), i.e. 90 degrees minus the line angle.
+            // Getting this wrong leaves the bridge side-on to the water it is
+            // supposed to cross.
+            float yaw = (float) Math.toDegrees(Math.atan2(dx, dz));
+            landmarks.add(new Instance(index, cx, deck, cz, yaw, scale,
+                    0f, 0f, 0f, 0f));
+            blockedPad.add(new float[]{cx, cz, Math.max(10f, span * 0.6f)});
+        }
+    }
+
+    /** Shore approaches kept clear for the bridge ramps. */
+    private final List<float[]> blockedPad = new ArrayList<float[]>();
+
+    /**
+     * Scatters the imported trees, giving the map a denser canopy than the
+     * built-in set alone. These are the tallest walkable objects, so they are
+     * what makes the world feel old-growth rather than a golf course.
+     */
+    private void buildPackTrees(ModelLibrary models, Terrain terrain, long seed) {
+        int index = indexOf(models, "pk_tree");
+        if (index < 0) {
+            return;
+        }
+        ModelLibrary.Model m = models.get(index);
+        Random r = new Random(seed + 3323);
+        float half = terrain.size * 0.47f;
+        int placed = 0;
+        // Attempts are generous because the overlap test rejects anything near
+        // an existing tree, and 580 trees is what makes the basin read as
+        // woodland rather than a lawn with features on it.
+        for (int attempt = 0; attempt < 26000 && placed < 580; attempt++) {
+            float x = (r.nextFloat() * 2f - 1f) * half;
+            float z = (r.nextFloat() * 2f - 1f) * half;
+            float h = terrain.heightAt(x, z);
+            if (h < terrain.waterLevel + 0.8f || x * x + z * z < 64f) {
+                continue;
+            }
+            if (terrain.slopeAt(x, z) > 0.46f || blocked(x, z, 4.6f)) {
+                continue;
+            }
+            float metres = m.targetSize * (0.72f + r.nextFloat() * 0.66f);
+            grid.add(new Instance(index, x, h - 0.10f, z, r.nextFloat() * 360f,
+                    m.scaleTo(metres), 0f, 0f, 0f, 0f));
+            placed++;
+        }
+    }
+
+    /**
+     * Blanks the ground with the imported grass, flowers and small stones.
+     *
+     * <p>The built-in grass is a clump card that reads as a wash of green from
+     * a distance. The imported clumps are denser and more varied, and mixing
+     * the two is what stops the meadow looking like one texture repeated. This
+     * is the call that satisfies "grass everywhere": the gap is small enough
+     * that stepping anywhere on dry land puts the player in grass.</p>
+     */
+    private void buildPackGroundCover(ModelLibrary models, Terrain terrain, long seed) {
+        // Largest first. The grid is the overlap test, so a bush scattered
+        // after 16k grass clumps finds almost every candidate blocked and
+        // silently disappears; scattering the tall things first and letting
+        // grass fill in around them is what keeps every asset present.
+        scatterPack(models, terrain, seed + 5521, "pk_bush", 5200, 2.4f, 6f);
+        scatterPack(models, terrain, seed + 5533, "pk_rock", 2200, 3.0f, 7f);
+        scatterPack(models, terrain, seed + 5537, "pk_rock2", 1400, 3.4f, 8f);
+        scatterPack(models, terrain, seed + 5519, "pk_flower", 3400, 0.50f, 3.6f);
+        scatterPack(models, terrain, seed + 5507, "pk_flowers", 5200, 0.55f, 3.2f);
+        scatterPack(models, terrain, seed + 5531, "pk_pebbles", 3200, 0.80f, 2.2f);
+        // pk_spell-book is deliberately absent: the Wander is a single lore
+        // object placed by World, not a shrub to be scattered 88 times.
+        // Grass last and densest: it should thread between everything else.
+        scatterPack(models, terrain, seed + 5501, "pk_grass", 30000, 0.50f, 2.4f);
+    }
+
+    /** One named pack model scattered over dry open ground. */
+    private void scatterPack(ModelLibrary models, Terrain terrain, long seed,
+                             String name, int attempts, float minGap, float minFromSpawn) {
+        int index = indexOf(models, name);
+        if (index < 0) {
+            return;
+        }
+        ModelLibrary.Model m = models.get(index);
+        Random r = new Random(seed);
+        float half = terrain.size * 0.47f;
+        for (int i = 0; i < attempts; i++) {
+            float x = (r.nextFloat() * 2f - 1f) * half;
+            float z = (r.nextFloat() * 2f - 1f) * half;
+            float h = terrain.heightAt(x, z);
+            if (h < terrain.waterLevel + 0.35f) {
+                continue;
+            }
+            if (x * x + z * z < minFromSpawn * minFromSpawn) {
+                continue;
+            }
+            if (terrain.slopeAt(x, z) > 0.52f) {
+                continue;
+            }
+            if (blocked(x, z, minGap) || onBridgeApproach(x, z)) {
+                continue;
+            }
+            float scale = m.scaleTo(m.targetSize * (0.78f + r.nextFloat() * 0.5f));
+            grid.add(new Instance(index, x, h - 0.03f, z, r.nextFloat() * 360f,
+                    scale, 0f, 0f, 0f, 0f));
+        }
+    }
+
+    private boolean onBridgeApproach(float x, float z) {
+        for (int i = 0; i < blockedPad.size(); i++) {
+            float[] p = blockedPad.get(i);
+            float dx = p[0] - x;
+            float dz = p[1] - z;
+            if (dx * dx + dz * dz < p[2] * p[2]) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ------------------------------------------------------------- scattering

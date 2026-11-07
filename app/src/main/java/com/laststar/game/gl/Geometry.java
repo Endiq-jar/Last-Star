@@ -523,6 +523,53 @@ public final class Geometry {
         return mb.build();
     }
 
+    /**
+     * Ground beyond the playable map.
+     *
+     * <p>The terrain is a finite 220 m square. Without this, a camera looking
+     * out from the middle of the map sees the terrain end and the distant
+     * mountain ring hanging in the sky beyond it. The skirt is a fan that
+     * starts at the terrain edge, stays flat for the near band so the two
+     * meet, then sinks away so its far rim is hidden behind the peaks.</p>
+     *
+     * @param inner      radius of the playable area, where it must match
+     * @param outer      radius of the far rim
+     * @param innerY     ground height at the boundary
+     * @param drop       how far the rim sinks below {@code innerY}
+     */
+    public static MeshData distantGround(float inner, float outer, int segments,
+                                         float innerY, float drop,
+                                         float r, float g, float b) {
+        MeshData.Builder mb = new MeshData.Builder();
+        float mid = inner + (outer - inner) * 0.35f;
+        float midY = innerY - drop * 0.10f;
+        float rimY = innerY - drop;
+        for (int s = 0; s < segments; s++) {
+            float t0 = (float) (s * 2.0 * Math.PI / segments);
+            float t1 = (float) ((s + 1) * 2.0 * Math.PI / segments);
+            float c0 = (float) Math.cos(t0), s0 = (float) Math.sin(t0);
+            float c1 = (float) Math.cos(t1), s1 = (float) Math.sin(t1);
+            // Two bands: the near one is very slightly dark, so the seam reads
+            // as a change in ground cover rather than a hard edge.
+            int a = mb.addVertex(c0 * inner, innerY, s0 * inner, 0f, 1f, 0f,
+                    r * 0.97f, g * 0.98f, b * 0.99f, 1f, 0f);
+            int bb = mb.addVertex(c1 * inner, innerY, s1 * inner, 0f, 1f, 0f,
+                    r * 0.97f, g * 0.98f, b * 0.99f, 1f, 0f);
+            int c = mb.addVertex(c1 * mid, midY, s1 * mid, 0f, 1f, 0f, r, g, b, 1f, 0f);
+            int d = mb.addVertex(c0 * mid, midY, s0 * mid, 0f, 1f, 0f, r, g, b, 1f, 0f);
+            mb.addQuad(a, bb, c, d);
+
+            int e = mb.addVertex(c0 * mid, midY, s0 * mid, 0f, 1f, 0f, r, g, b, 1f, 0f);
+            int f = mb.addVertex(c1 * mid, midY, s1 * mid, 0f, 1f, 0f, r, g, b, 1f, 0f);
+            int h = mb.addVertex(c1 * outer, rimY, s1 * outer, 0f, 1f, 0f,
+                    r * 0.88f, g * 0.90f, b * 0.96f, 1f, 0f);
+            int i = mb.addVertex(c0 * outer, rimY, s0 * outer, 0f, 1f, 0f,
+                    r * 0.88f, g * 0.90f, b * 0.96f, 1f, 0f);
+            mb.addQuad(e, f, h, i);
+        }
+        return mb.build();
+    }
+
     /** Cone (base at y = 0). */
     public static MeshData cone(float radius, float height, int segments,
                                 float r, float g, float b, float a) {

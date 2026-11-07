@@ -30,6 +30,7 @@ VERSION = 2
 # ModelLibrary role ids
 TREE, ROCK, PLANT, GRASS, FLOWER = 0, 1, 2, 3, 4
 PATH, HILL = 9, 20
+WANDER = 23
 
 SRC = 'assets_src/asset/game asset (FBX)'
 
@@ -47,7 +48,7 @@ ASSETS = [
     ('Flower01.fbx',   'flower',     FLOWER,   0.42, (0.88, 0.46, 0.74), 'height'),
     ('Flowers01.fbx',  'flowers',    FLOWER,   0.60, (0.95, 0.74, 0.36), 'width'),
     ('Bridge01.fbx',   'bridge',     PATH,    14.0, (0.62, 0.48, 0.32), 'span'),
-    ('spell-book.fbx', 'spell-book', PLANT,    0.42, (0.42, 0.34, 0.74), 'span'),
+    ('spell-book.fbx', 'spell-book', WANDER,   0.42, (0.42, 0.34, 0.74), 'span'),
 ]
 
 # Two decorative meshes carry most of the triangle budget and are seen from a
