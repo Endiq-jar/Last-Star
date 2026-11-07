@@ -110,9 +110,14 @@ jobs:
         run: |
           set -uo pipefail
           mkdir -p builds/android
-          if ! godot --headless --path . --export-debug "Android" builds/android/LastStar-debug.apk > "$RUNNER_TEMP/godot-export.log" 2>&1; then
+          set +e
+          godot --headless --path . --export-debug "Android" builds/android/LastStar-debug.apk > "$RUNNER_TEMP/godot-export.log" 2>&1
+          export_status=$?
+          set -e
+          if [[ $export_status -ne 0 ]]; then
             cat "$RUNNER_TEMP/godot-export.log"
-            echo "### Android export failure" >> "$GITHUB_STEP_SUMMARY"
+            echo "### Android export failure (exit $export_status)" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Godot Android export exited with status $export_status"
             cat "$RUNNER_TEMP/godot-export.log" >> "$GITHUB_STEP_SUMMARY"
             while IFS= read -r line; do
               if [[ -n "$line" ]]; then echo "::error::$line"; fi
