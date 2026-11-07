@@ -36,14 +36,24 @@ public final class TouchControls {
     public float lookSensitivity = 0.16f;
 
     // --- buttons -----------------------------------------------------
-    public final Button attack = new Button(636f, 330f, 33f);
-    /** The heavy: tap to swing, hold to charge. Smaller and inboard of ATTACK. */
-    public final Button heavy = new Button(690f, 372f, 24f);
-    /** Dodge, and the parry that shares its corner of the screen. */
-    public final Button dodge = new Button(578f, 384f, 22f);
-    public final Button parry = new Button(690f, 320f, 20f);
-    public final Button jump = new Button(566f, 336f, 24f);
-    public final Button sprint = new Button(690f, 268f, 22f);
+    /**
+     * The action cluster, in two arcs around the right thumb.
+     *
+     * <p>Six buttons plus four spell slots is more than a corner holds by
+     * accident, so the layout is deliberate: the attack sits inside the thumb's
+     * natural arc and is the largest, the heavyweight moves (heavy, dodge) sit
+     * just outside it, and the situational ones (parry, jump, sprint) form an
+     * outer ring where a deliberate reach is fine. Every pair is spaced so two
+     * buttons cannot be caught by one thumb.</p>
+     */
+    public final Button attack = new Button(628f, 336f, 32f);
+    /** The heavy: tap to swing, hold to charge. */
+    public final Button heavy = new Button(686f, 296f, 22f);
+    /** Dodge, the defensive move that has to be reachable fast. */
+    public final Button dodge = new Button(686f, 368f, 21f);
+    public final Button parry = new Button(606f, 258f, 20f);
+    public final Button jump = new Button(566f, 300f, 22f);
+    public final Button sprint = new Button(660f, 236f, 19f);
     public final Button pause = new Button(196f, 26f, 15f);
     public final Button sound = new Button(236f, 26f, 15f);
     /**
@@ -54,10 +64,10 @@ public final class TouchControls {
      * enough that a thumb cannot hit two at once.</p>
      */
     public final Button[] spell = {
-            new Button(452f, 352f, 18f),
-            new Button(505f, 352f, 18f),
-            new Button(558f, 352f, 18f),
-            new Button(611f, 352f, 18f)
+            new Button(420f, 366f, 17f),
+            new Button(466f, 366f, 17f),
+            new Button(512f, 366f, 17f),
+            new Button(558f, 366f, 17f)
     };
 
     private int attackPointer = -1;
@@ -383,21 +393,28 @@ public final class TouchControls {
     public void setLeftHanded(boolean leftHanded) {
         if (leftHanded) {
             lookSensitivity = 0.16f;
-            attack.x = 84f;
-            heavy.x = 30f;
-            dodge.x = 142f;
-            parry.x = 30f;
-            jump.x = 154f;
-            sprint.x = 30f;
+            // Mirror the whole cluster about the vertical centre line.
+            attack.x = DESIGN_W - 628f;
+            heavy.x = DESIGN_W - 686f;
+            dodge.x = DESIGN_W - 686f;
+            parry.x = DESIGN_W - 606f;
+            jump.x = DESIGN_W - 566f;
+            sprint.x = DESIGN_W - 660f;
+            for (int i = 0; i < spell.length; i++) {
+                spell[i].x = DESIGN_W - spell[i].x;
+            }
             pause.x = 524f;
             sound.x = 564f;
         } else {
-            attack.x = 636f;
-            heavy.x = 690f;
-            dodge.x = 578f;
-            parry.x = 690f;
+            attack.x = 628f;
+            heavy.x = 686f;
+            dodge.x = 686f;
+            parry.x = 606f;
             jump.x = 566f;
-            sprint.x = 690f;
+            sprint.x = 660f;
+            for (int i = 0; i < spell.length; i++) {
+                spell[i].x = 420f + i * 46f;
+            }
             pause.x = 196f;
             sound.x = 236f;
         }

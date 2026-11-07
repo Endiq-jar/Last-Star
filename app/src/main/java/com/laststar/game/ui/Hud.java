@@ -236,10 +236,13 @@ public final class Hud {
                 b.circle(btn.x, btn.y, radius * 0.84f * left, 16, 0f, 0f, 0f, 0.55f);
             }
 
-            b.text((i + 1) + "", btn.x - 2f, btn.y - 4f, 1, 1f, 1f, 1f,
+            // The slot number is centred in the disc; the name sits under it,
+            // centred too, so a moved slot never leaves the two out of step.
+            b.textCentred((i + 1) + "", btn.x, btn.y - 3f, 1, 1f, 1f, 1f,
                     ready ? 0.95f : 0.45f, font);
-            b.text(shortName(spell.def.name), btn.x - 2f, btn.y + radius + 2f, 1,
-                    1f, 1f, 1f, 0.62f, font);
+            String label = shortName(spell.def.name);
+            b.textCentred(label, btn.x, btn.y + radius + 3f, 1, 1f, 1f, 1f,
+                    0.62f, font);
             if (spell.level > 1) {
                 b.text("L" + spell.level, btn.x + radius - 3f,
                         btn.y - radius - 2f, 1, 1f, 0.92f, 0.70f, 0.85f, font);

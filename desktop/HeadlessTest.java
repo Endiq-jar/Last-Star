@@ -48,6 +48,7 @@ public final class HeadlessTest {
         testDifficulty();
         testWorldSimulation();
         testPlayerMovement();
+        testTouchLayout();
         testCombat();
         testShardCollectionAndVictory();
         testEnemyAi();
@@ -824,6 +825,65 @@ public final class HeadlessTest {
         float half = w.terrain.size * 0.5f;
         check(Math.abs(w.player.position.x) <= half && Math.abs(w.player.position.z) <= half,
                 "player cannot leave the world");
+    }
+
+    /**
+     * Checks the action cluster is physically usable.
+     *
+     * <p>Adding four buttons to a corner is how a game ends up with one that
+     * cannot be reached or two that share a thumb. Distance between centres
+     * against the sum of radii is the whole test.</p>
+     */
+    private static void testTouchLayout() {
+        section("touch layout");
+        com.laststar.game.ui.TouchControls c = new com.laststar.game.ui.TouchControls();
+        com.laststar.game.ui.TouchControls.Button[] all = {
+                c.attack, c.heavy, c.dodge, c.parry, c.jump, c.sprint,
+                c.spell[0], c.spell[1], c.spell[2], c.spell[3]
+        };
+        String[] names = {"ATTACK", "HEAVY", "DODGE", "PARRY", "JUMP", "SPRINT",
+                "SPELL1", "SPELL2", "SPELL3", "SPELL4"};
+        boolean disjoint = true;
+        String clash = "";
+        for (int i = 0; i < all.length; i++) {
+            for (int j = i + 1; j < all.length; j++) {
+                float dx = all[i].x - all[j].x;
+                float dy = all[i].y - all[j].y;
+                float d = (float) Math.sqrt(dx * dx + dy * dy);
+                if (d < all[i].radius + all[j].radius) {
+                    disjoint = false;
+                    clash = names[i] + "/" + names[j];
+                }
+            }
+        }
+        check(disjoint, "no two buttons overlap" + (disjoint ? "" : " (" + clash + ")"));
+        boolean inside = true;
+        for (int i = 0; i < all.length; i++) {
+            if (all[i].x - all[i].radius < 0f
+                    || all[i].x + all[i].radius > 720f
+                    || all[i].y - all[i].radius < 0f
+                    || all[i].y + all[i].radius > 405f) {
+                inside = false;
+            }
+        }
+        check(inside, "every button is on screen");
+        // The attack has to be the biggest thing in the corner.
+        boolean biggest = true;
+        for (int i = 1; i < all.length; i++) {
+            if (all[i].radius > c.attack.radius) {
+                biggest = false;
+            }
+        }
+        check(biggest, "ATTACK is the largest button");
+        // Mirroring must not push anything off screen.
+        c.setLeftHanded(true);
+        boolean mirroredInside = true;
+        for (int i = 0; i < all.length; i++) {
+            if (all[i].x - all[i].radius < 0f || all[i].x + all[i].radius > 720f) {
+                mirroredInside = false;
+            }
+        }
+        check(mirroredInside, "the left-handed layout stays on screen");
     }
 
     private static void testCombat() {
