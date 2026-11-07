@@ -166,11 +166,14 @@ public final class PropPlanner {
         buildPackTrees(models, terrain, seed);
         buildPackGroundCover(models, terrain, seed);
 
-        // Grass and flowers go on last of all. They have the smallest gap
-        // between them, so they are the layer that fills whatever space is
-        // left rather than the layer everything else has to work around.
-        scatter(models, terrain, seed + 37, ModelLibrary.GRASS, 3500, 0.70f, 3f, true);
-        scatter(models, terrain, seed + 41, ModelLibrary.FLOWER, 1100, 1.10f, 4f, true);
+        // The built-in grass and flower cards go on last of all. They are
+        // small -- 0.16 to 0.48 m -- and being single opaque quads they read as
+        // coloured cards at close range, so they are kept to a supporting role
+        // and the imported geometry leads. Dropping them entirely was worse:
+        // the meadow lost its small-scale detail and the ground went back to
+        // reading as bare.
+        scatter(models, terrain, seed + 37, ModelLibrary.GRASS, 3000, 0.70f, 3f, true);
+        scatter(models, terrain, seed + 41, ModelLibrary.FLOWER, 2600, 0.85f, 4f, true);
     }
 
 
@@ -404,8 +407,17 @@ public final class PropPlanner {
         scatterPack(models, terrain, seed + 5537, "pk_rock2", 5000, 3.4f, 8f);
         scatterPack(models, terrain, seed + 5521, "pk_bush", 5200, 2.4f, 6f);
         scatterPack(models, terrain, seed + 5533, "pk_rock", 2200, 3.0f, 7f);
-        scatterPack(models, terrain, seed + 5519, "pk_flower", 3400, 0.50f, 3.6f);
-        scatterPack(models, terrain, seed + 5507, "pk_flowers", 5200, 0.55f, 3.2f);
+        scatterPack(models, terrain, seed + 5507, "pk_flowers", 22000, 0.48f, 3.2f);
+        // A second pass tinted towards the pinks and whites of a wildflower
+        // meadow, so the flowers are not one uniform harvest yellow.
+        scatterPackTinted(models, terrain, seed + 5509, "pk_flowers", 9000,
+                0.48f, 3.2f, 0.96f, 0.70f, 0.92f, 0.55f);
+        // Flower01 is an extruded twelve-sided prism: a solid tapered drum.
+        // In the meadow that reads as a coloured sheet lying on the grass, but
+        // standing in the shallows it is exactly the shape of a reed clump. It
+        // goes only where the water line is, which is both where it looks right
+        // and a place nothing else was dressing.
+        scatterReeds(models, terrain, seed + 5519, "pk_flower", 30000);
         scatterPack(models, terrain, seed + 5531, "pk_pebbles", 3200, 0.80f, 2.2f);
         // pk_spell-book is deliberately absent: the Wander is a single lore
         // object placed by World, not a shrub to be scattered 88 times.
@@ -415,6 +427,79 @@ public final class PropPlanner {
         // until they merge into a carpet, with the terrain's own meadow colour
         // showing through the gaps.
         scatterPack(models, terrain, seed + 5501, "pk_grass", 40000, 0.55f, 2.4f);
+    }
+
+    /**
+     * Places tapered stems along the water's edge.
+     *
+     * <p>Reeds want the band where the ground is just under the water line:
+     * deep enough to stand in, shallow enough to still be rooted. Nothing else
+     * is placed there, so this both dresses a bare strip and keeps every asset
+     * in the pack in the world.</p>
+     */
+    private void scatterReeds(ModelLibrary models, Terrain terrain, long seed,
+                              String name, int attempts) {
+        int index = indexOf(models, name);
+        if (index < 0) {
+            return;
+        }
+        ModelLibrary.Model m = models.get(index);
+        Random r = new Random(seed);
+        float half = terrain.size * 0.47f;
+        for (int i = 0; i < attempts; i++) {
+            float x = (r.nextFloat() * 2f - 1f) * half;
+            float z = (r.nextFloat() * 2f - 1f) * half;
+            float h = terrain.heightAt(x, z);
+            // The shallow band only.
+            if (h > terrain.waterLevel + 0.22f || h < terrain.waterLevel - 1.10f) {
+                continue;
+            }
+            if (blocked(x, z, 0.42f) || onBridgeApproach(x, z)) {
+                continue;
+            }
+            float scale = m.scaleTo(m.targetSize * (0.72f + r.nextFloat() * 0.55f));
+            grid.add(new Instance(index, x, h - 0.04f, z, r.nextFloat() * 360f,
+                    scale, 0f, 0f, 0f, 0f));
+        }
+    }
+
+    /**
+     * As {@link #scatterPack}, with a fixed tint.
+     *
+     * <p>Used to give one model two colourways: the flowers look like a meadow
+     * of several species rather than one, from a single asset.</p>
+     */
+    private void scatterPackTinted(ModelLibrary models, Terrain terrain, long seed,
+                                   String name, int attempts, float minGap,
+                                   float minFromSpawn, float tr, float tg, float tb,
+                                   float amount) {
+        int index = indexOf(models, name);
+        if (index < 0) {
+            return;
+        }
+        ModelLibrary.Model m = models.get(index);
+        Random r = new Random(seed);
+        float half = terrain.size * 0.47f;
+        for (int i = 0; i < attempts; i++) {
+            float x = (r.nextFloat() * 2f - 1f) * half;
+            float z = (r.nextFloat() * 2f - 1f) * half;
+            float h = terrain.heightAt(x, z);
+            if (h < terrain.waterLevel + 0.35f) {
+                continue;
+            }
+            if (x * x + z * z < minFromSpawn * minFromSpawn) {
+                continue;
+            }
+            if (terrain.slopeAt(x, z) > 0.52f) {
+                continue;
+            }
+            if (blocked(x, z, minGap) || onBridgeApproach(x, z)) {
+                continue;
+            }
+            float scale = m.scaleTo(m.targetSize * (0.78f + r.nextFloat() * 0.5f));
+            grid.add(new Instance(index, x, h - 0.03f, z, r.nextFloat() * 360f,
+                    scale, tr, tg, tb, amount));
+        }
     }
 
     /** One named pack model scattered over dry open ground. */
@@ -444,8 +529,17 @@ public final class PropPlanner {
                 continue;
             }
             float scale = m.scaleTo(m.targetSize * (0.78f + r.nextFloat() * 0.5f));
+            // The tint multiplies the vertex colour, so it can only darken a
+            // channel or leave it alone; anything above 1 washes towards white.
+            // A gentle drift towards straw or towards deep green is enough to
+            // stop twenty thousand identical clumps reading as one sheet.
+            float shade = 0.86f + r.nextFloat() * 0.14f;
+            float warm = r.nextFloat();
+            float tr = warm > 0.55f ? shade * 1.06f : shade * 0.92f;
+            float tg = shade;
+            float tb = warm > 0.55f ? shade * 0.86f : shade * 1.00f;
             grid.add(new Instance(index, x, h - 0.03f, z, r.nextFloat() * 360f,
-                    scale, 0f, 0f, 0f, 0f));
+                    scale, tr, tg, tb, 0.18f + r.nextFloat() * 0.20f));
         }
     }
 

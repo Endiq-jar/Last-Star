@@ -291,7 +291,7 @@ public final class HeadlessTest {
                 {"pk_tree", "tree"},
                 {"pk_bush", "bush"},
                 {"pk_grass", "grass"},
-                {"pk_flower", "flower"},
+                {"pk_flower", "reed"},
                 {"pk_flowers", "flowers"},
                 {"pk_rock", "rock"},
                 {"pk_rock2", "rock2"},
@@ -314,6 +314,8 @@ public final class HeadlessTest {
 
         // Ground cover has to be dense enough to read as a carpet rather than
         // as scattered decorations; this is the "grass everywhere" criterion.
+        check(planner.countNamed("pk_flower") > 200,
+                "reeds stand along the water (" + planner.countNamed("pk_flower") + ")");
         check(planner.countNamed("pk_grass") > 8000,
                 "grass blankets the ground (" + planner.countNamed("pk_grass") + ")");
 
