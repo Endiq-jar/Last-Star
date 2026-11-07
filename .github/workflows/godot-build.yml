@@ -114,7 +114,7 @@ jobs:
           godot --headless --editor --path . --import --quit
           godot --headless --path . --quit-after 8
 
-      - name: Export arm64 Android debug APK
+      - name: Export Android debug APK for ARMv7 and ARM64
         shell: bash
         run: |
           set -uo pipefail
@@ -149,6 +149,13 @@ jobs:
             find builds -maxdepth 4 -type f -printf '%p (%s bytes)\\n' || true
             exit 1
           fi
+          unzip -Z1 builds/android/LastStar-debug.apk > "$RUNNER_TEMP/apk-files.txt"
+          for abi in armeabi-v7a arm64-v8a; do
+            if ! grep -q "^lib/$abi/" "$RUNNER_TEMP/apk-files.txt"; then
+              echo "::error::APK is missing native libraries for the requested Android ABI: $abi"
+              exit 1
+            fi
+          done
 
       - name: Upload Godot export diagnostics
         if: always()

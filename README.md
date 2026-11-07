@@ -29,6 +29,6 @@ The add-on's MIT license is retained at `addons/terrain_3d/LICENSE.txt`. Origina
 
 ## Automatic Android build
 
-GitHub Actions runs GDScript format/lint checks, imports the project with Godot 4.7.2, performs a headless startup check, and exports an arm64 Android debug APK on pushes, pull requests, or manual dispatch. Download `LastStar-Android-debug` from the completed workflow run's **Artifacts** section. The APK is a debug build, not a release-signed store package.
+GitHub Actions runs GDScript format/lint checks, imports the project with Godot 4.7.2, performs a headless startup check, and exports a universal ARMv7 plus ARM64 Android debug APK on pushes, pull requests, or manual dispatch. Download `LastStar-Android-debug` from the completed workflow run's **Artifacts** section. The APK is a debug build, not a release-signed store package.
 
 The development workspace has no Godot executable, so the new Android export workflow has not yet been run here. Use its first GitHub Actions result to verify the extension and export on the CI runner.
