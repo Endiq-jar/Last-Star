@@ -7,11 +7,11 @@ const ShardScript = preload("res://scripts/laststar/shard.gd")
 
 const TERRAIN_CHUNK_SIZE := 32.0
 const TERRAIN_CHUNK_STEPS := 20
-const TERRAIN_RENDER_DISTANCE := 3
-const TREES_PER_CHUNK := 12
-const ROCKS_PER_CHUNK := 5
-const GRASS_PER_CHUNK := 46
-const FLOWERS_PER_CHUNK := 18
+const TERRAIN_RENDER_DISTANCE := 2
+const TREES_PER_CHUNK := 7
+const ROCKS_PER_CHUNK := 3
+const GRASS_PER_CHUNK := 28
+const FLOWERS_PER_CHUNK := 12
 const TERRAIN3D_DATA_DIRECTORY := "res://assets/terrain3d/data"
 # Centers the sample's 0, -1, and -2 regions around the playable start area.
 const TERRAIN3D_DATA_OFFSET := Vector3(-512.0, 0.0, 1536.0)
@@ -299,7 +299,9 @@ func _build_sky_and_light() -> void:
 	sun.rotation_degrees = Vector3(-48.0, 38.0, 0.0)
 	sun.light_color = Color(1.0, 0.88, 0.68)
 	sun.light_energy = 1.25
-	sun.shadow_enabled = true
+	# Large cascaded shadows over the streamed Terrain3D clipmap produce mobile
+	# GPU artifacts on several Android drivers; keep the scene unshadowed and fast.
+	sun.shadow_enabled = false
 	add_child(sun)
 
 
@@ -322,20 +324,21 @@ func _build_water() -> void:
 
 
 func _build_forest() -> void:
-	tree_trunk_mesh = CylinderMesh.new()
-	tree_trunk_mesh.top_radius = 0.18
-	tree_trunk_mesh.bottom_radius = 0.32
-	tree_trunk_mesh.height = 2.8
-	tree_trunk_material = StandardMaterial3D.new()
-	tree_trunk_material.albedo_color = Color("#76513a")
-	tree_trunk_material.roughness = 1.0
-	tree_leaf_mesh = CylinderMesh.new()
-	tree_leaf_mesh.top_radius = 0.0
-	tree_leaf_mesh.bottom_radius = 1.45
-	tree_leaf_mesh.height = 2.5
-	tree_leaf_material = StandardMaterial3D.new()
-	tree_leaf_material.albedo_color = Color("#28744b")
-	tree_leaf_material.roughness = 0.9
+	# Keep the source meshes/materials in Terrain3D's asset library so the
+	# runtime trees and the editor's foliage assets use the same resources.
+	var tree_source_scene := load("res://assets/terrain3d/foliage/pine_tree.tscn") as PackedScene
+	if tree_source_scene != null:
+		var tree_source := tree_source_scene.instantiate()
+		var trunk_source := tree_source.get_node("Trunk") as MeshInstance3D
+		var canopy_source := tree_source.get_node("Canopy") as MeshInstance3D
+		tree_trunk_mesh = trunk_source.mesh as CylinderMesh
+		tree_leaf_mesh = canopy_source.mesh as CylinderMesh
+		tree_trunk_material = trunk_source.get_active_material(0) as StandardMaterial3D
+		tree_leaf_material = canopy_source.get_active_material(0) as StandardMaterial3D
+		tree_source.free()
+	else:
+		push_error("Terrain3D pine tree asset could not be loaded.")
+		return
 	rock_mesh = SphereMesh.new()
 	rock_mesh.radius = 0.8
 	rock_mesh.height = 1.15
@@ -394,13 +397,13 @@ func _decorate_terrain_chunk(root: Node3D, coord: Vector2i) -> void:
 		var ground_y := height_at(world_x, world_z)
 		if ground_y > 8.0:
 			continue
-		var scale := rng.randf_range(0.72, 1.42)
+		var scale := rng.randf_range(0.78, 1.08)
 		var basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale)
 		var origin := Vector3(local_x, ground_y, local_z)
-		trunk_transforms.append(Transform3D(basis, origin + Vector3.UP * 1.4 * scale))
-		lower_transforms.append(Transform3D(basis, origin + Vector3.UP * 2.4 * scale))
-		middle_transforms.append(Transform3D(basis, origin + Vector3.UP * 3.4 * scale))
-		upper_transforms.append(Transform3D(basis, origin + Vector3.UP * 4.3 * scale))
+		trunk_transforms.append(Transform3D(basis, origin + Vector3.UP * 1.3 * scale))
+		lower_transforms.append(Transform3D(basis, origin + Vector3.UP * 2.2 * scale))
+		middle_transforms.append(Transform3D(basis, origin + Vector3.UP * 2.95 * scale))
+		upper_transforms.append(Transform3D(basis, origin + Vector3.UP * 3.7 * scale))
 	_fill_multimesh(trunk_mm, trunk_transforms)
 	_fill_multimesh(lower_mm, lower_transforms)
 	_fill_multimesh(middle_mm, middle_transforms)
