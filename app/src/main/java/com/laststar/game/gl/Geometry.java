@@ -57,14 +57,12 @@ public final class Geometry {
      */
     public static MeshData terrain(Terrain t) {
         int n = t.segments + 1;
-        float half = t.size * 0.5f;
-        float cell = t.size / t.segments;
 
         MeshData.Builder b = new MeshData.Builder();
         for (int gz = 0; gz < n; gz++) {
             for (int gx = 0; gx < n; gx++) {
-                float x = gx * cell - half;
-                float z = gz * cell - half;
+                float x = t.worldX(gx);
+                float z = t.worldZ(gz);
                 float y = t.getHeight(gx, gz);
                 Vec3 normal = t.normalAt(x, z);
 

@@ -126,6 +126,23 @@ public final class HeadlessTest {
         checkNear(t.heightAt(1f, 1f), 0.35f, 0.05f, "spawn plateau is flat");
         check(t.slopeAt(0f, 0f) < 0.05f, "spawn is walkable");
 
+        Terrain leftTile = Terrain.chunk(null, 220f, 110, 818L, 0, 0, 660f);
+        Terrain rightTile = Terrain.chunk(null, 220f, 110, 818L, 1, 0, 660f);
+        checkNear(leftTile.heightAt(110f, 14f), rightTile.heightAt(110f, 14f),
+                0.0001f, "adjacent terrain tiles share an exact height seam");
+        check(leftTile.normalAt(110f, 14f).sub(rightTile.normalAt(110f, 14f)).length() < 0.001f,
+                "adjacent terrain tiles share a smooth normal seam");
+        com.laststar.game.core.TerrainChunkStreamer stream =
+                new com.laststar.game.core.TerrainChunkStreamer(null, 818L);
+        check(stream.loadedChunks().size() >= 1 && stream.loadedChunks().size() <= 9,
+                "streamer exposes only completed resident chunks");
+        check(stream.awaitWindow(5000L) && stream.loadedChunks().size() == 9,
+                "streamer completes an initial 3x3 terrain window");
+        stream.update(240f, 0f);
+        check(stream.centerChunkX() == 1 && stream.awaitWindow(5000L)
+                        && stream.loadedChunks().size() == 9,
+                "streamer advances an asynchronous bounded chunk window");
+
         // Bilinear sampling is continuous: small steps -> small height changes.
         float prev = t.heightAt(-100f, 5f);
         boolean continuous = true;
@@ -855,15 +872,20 @@ public final class HeadlessTest {
         }
         check(w.player.sprintStamina > 0.2f, "stamina recovers");
 
-        // World bounds.
+        // Continuous terrain stream: movement leaves the original 220 m arena,
+        // advances the resident tile window and keeps nine neighboring chunks.
         in.moveY = 1f;
         in.sprintHeld = true;
         for (int i = 0; i < 60 * 60; i++) {
             w.update(1f / 60f, in);
         }
-        float half = w.terrain.size * 0.5f;
-        check(Math.abs(w.player.position.x) <= half && Math.abs(w.player.position.z) <= half,
-                "player cannot leave the world");
+        check(Math.abs(w.player.position.x) > 110f || Math.abs(w.player.position.z) > 110f,
+                "player can cross the former region edge");
+        check(w.terrainStreamer.awaitWindow(5000L)
+                        && w.terrainStreamer.loadedChunks().size() == 9
+                        && (w.terrainStreamer.centerChunkX() != 0
+                        || w.terrainStreamer.centerChunkZ() != 0),
+                "terrain window streams neighboring chunks after travel");
     }
 
     /**

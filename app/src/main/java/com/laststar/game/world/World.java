@@ -2,6 +2,7 @@ package com.laststar.game.world;
 
 import com.laststar.game.core.Noise;
 import com.laststar.game.core.Terrain;
+import com.laststar.game.core.TerrainChunkStreamer;
 import com.laststar.game.world.lore.Elaris;
 import com.laststar.game.world.lore.QuestCorpus;
 import com.laststar.game.world.lore.SpellCorpus;
@@ -65,6 +66,8 @@ public final class World {
      * through this field.
      */
     public Terrain terrain;
+    /** Resident rolling 3x3 procedural terrain window for the outdoor world. */
+    public final TerrainChunkStreamer terrainStreamer;
     public final Player player;
     public final List<Enemy> enemies = new ArrayList<>();
     public final List<Shard> shards = new ArrayList<>();
@@ -153,7 +156,8 @@ public final class World {
         this.worldSeed = (int) seed;
         this.rng = new Random(seed);
         this.regionIndex = 0;
-        this.terrain = new Terrain(220f, 110, seed);
+        this.terrainStreamer = new TerrainChunkStreamer(region, seed);
+        this.terrain = terrainStreamer.center();
         this.player = new Player(spawnPoint());
         this.player.yaw = 180f;
         quests.refreshAvailability();
@@ -163,6 +167,25 @@ public final class World {
     /** The settlement this world is built for. */
     public Elaris.Region region() {
         return region;
+    }
+
+    /** Queries the resident global terrain stream (or the bounded Hollow field). */
+    public float heightAt(float worldX, float worldZ) {
+        return inHollow ? terrain.heightAt(worldX, worldZ)
+                : terrainStreamer.heightAt(worldX, worldZ);
+    }
+
+    public float slopeAt(float worldX, float worldZ) {
+        return inHollow ? terrain.slopeAt(worldX, worldZ)
+                : terrainStreamer.slopeAt(worldX, worldZ);
+    }
+
+    /** Keeps the rolling terrain window centred on the player's current tile. */
+    public void updateTerrainStream() {
+        if (!inHollow) {
+            terrainStreamer.update(player.position.x, player.position.z);
+            terrain = terrainStreamer.center();
+        }
     }
 
     /**
@@ -180,10 +203,8 @@ public final class World {
         inHollow = false;
         regionIndex = index;
         region = Elaris.regions()[index];
-        Terrain next = Terrain.forRegion(region, 220f, 110, worldSeed + index * 7919L);
-        // Terrain is final, so the region swap rebuilds through the field's
-        // holder rather than assigning. See the terrain field's declaration.
-        terrain = next;
+        terrainStreamer.reset(region, worldSeed + index * 7919L);
+        terrain = terrainStreamer.center();
         player.respawn(spawnPoint());
         buildLevel(level());
         quests.report(QuestCorpus.Kind.TRAVEL, region.name, 1);
@@ -230,7 +251,8 @@ public final class World {
         inHollow = false;
         regionIndex = hollowReturnRegion;
         region = Elaris.regions()[regionIndex];
-        terrain = Terrain.forRegion(region, 220f, 110, worldSeed + regionIndex * 7919L);
+        terrainStreamer.reset(region, worldSeed + regionIndex * 7919L);
+        terrain = terrainStreamer.center();
         player.respawn(spawnPoint());
         buildLevel(Math.max(1, level));
         phase = Phase.PLAYING;
@@ -303,7 +325,7 @@ public final class World {
     }
 
     public Vec3 spawnPoint() {
-        return new Vec3(0f, terrain.heightAt(0f, 0f) + 0.05f, 0f);
+        return new Vec3(0f, heightAt(0f, 0f) + 0.05f, 0f);
     }
 
     // ------------------------------------------------------------------
@@ -327,11 +349,11 @@ public final class World {
             float dist = 24f + (float) r.nextDouble() * 62f;
             float x = (float) Math.cos(angle) * dist;
             float z = (float) Math.sin(angle) * dist;
-            float h = terrain.heightAt(x, z);
+            float h = heightAt(x, z);
             if (h < terrain.waterLevel + 0.6f) {
                 continue;
             }
-            if (terrain.slopeAt(x, z) > 0.55f) {
+            if (slopeAt(x, z) > 0.55f) {
                 continue;
             }
             boolean tooClose = false;
@@ -355,7 +377,7 @@ public final class World {
             float dist = 18f + shards.size() * 9f;
             float x = (float) Math.cos(angle) * dist;
             float z = (float) Math.sin(angle) * dist;
-            float h = terrain.heightAt(x, z);
+            float h = heightAt(x, z);
             shards.add(new Shard(new Vec3(x, h + 1.15f, z), shards.size()));
         }
 
@@ -373,7 +395,7 @@ public final class World {
                 float d = 30f + (float) r.nextDouble() * 45f;
                 anchor = new Vec3((float) Math.cos(a) * d, 0f, (float) Math.sin(a) * d);
             }
-            anchor = anchor.withY(terrain.heightAt(anchor.x, anchor.z) + 0.05f);
+            anchor = anchor.withY(heightAt(anchor.x, anchor.z) + 0.05f);
             float hp = 60f + (float) r.nextDouble() * 25f + levelIndex * 14f;
             Enemy enemy = new Enemy(anchor, hp);
             // Regions stock their own Hollow creatures, so what a hunt names is
@@ -390,10 +412,10 @@ public final class World {
             float d = 8f + (float) r.nextDouble() * 60f;
             float x = (float) Math.cos(a) * d;
             float z = (float) Math.sin(a) * d;
-            if (terrain.heightAt(x, z) < terrain.waterLevel + 0.4f) {
+            if (heightAt(x, z) < terrain.waterLevel + 0.4f) {
                 continue;
             }
-            pickups.add(new Pickup(new Vec3(x, terrain.heightAt(x, z) + 0.85f, z), Pickup.Type.HEALTH));
+            pickups.add(new Pickup(new Vec3(x, heightAt(x, z) + 0.85f, z), Pickup.Type.HEALTH));
         }
 
         // The region's boss waits at the far side of the map, past the shards.
@@ -401,7 +423,7 @@ public final class World {
         float bossAngle = (float) (regionIndex * 2.39996 + 1.1);
         float bossX = (float) Math.cos(bossAngle) * 74f;
         float bossZ = (float) Math.sin(bossAngle) * 74f;
-        bossSpawn = new Vec3(bossX, terrain.heightAt(bossX, bossZ) + 0.05f, bossZ);
+        bossSpawn = new Vec3(bossX, heightAt(bossX, bossZ) + 0.05f, bossZ);
         boss = null;
 
         // Scatter the region's lost pages. A page lying in the world is how the
@@ -437,15 +459,15 @@ public final class World {
     }
 
     /** Random open dry ground between two radii, or null. */
-    private static Vec3 findOpenGround(Terrain terrain, Random r,
+    private Vec3 findOpenGround(Terrain terrain, Random r,
                                        float minRadius, float maxRadius) {
         for (int i = 0; i < 220; i++) {
             double a = r.nextDouble() * Math.PI * 2.0;
             float d = minRadius + r.nextFloat() * (maxRadius - minRadius);
             float x = (float) Math.cos(a) * d;
             float z = (float) Math.sin(a) * d;
-            float h = terrain.heightAt(x, z);
-            if (h < terrain.waterLevel + 0.8f || terrain.slopeAt(x, z) > 0.45f) {
+            float h = heightAt(x, z);
+            if (h < terrain.waterLevel + 0.8f || slopeAt(x, z) > 0.45f) {
                 continue;
             }
             return new Vec3(x, h + 0.30f, z);
@@ -460,24 +482,24 @@ public final class World {
      * a seed where every candidate is rejected; losing it would mean losing
      * the spell system.</p>
      */
-    private static Vec3 findWanderSpot(Terrain terrain) {
+    private Vec3 findWanderSpot(Terrain terrain) {
         for (float radius = 9f; radius < 44f; radius += 1.5f) {
             int steps = 16 + (int) (radius * 2f);
             for (int i = 0; i < steps; i++) {
                 double a = i * Math.PI * 2.0 / steps;
                 float x = (float) Math.cos(a) * radius;
                 float z = (float) Math.sin(a) * radius;
-                float h = terrain.heightAt(x, z);
+                float h = heightAt(x, z);
                 if (h < terrain.waterLevel + 1.1f) {
                     continue;
                 }
-                if (terrain.slopeAt(x, z) > 0.34f) {
+                if (slopeAt(x, z) > 0.34f) {
                     continue;
                 }
                 return new Vec3(x, h + 0.30f, z);
             }
         }
-        return new Vec3(0f, terrain.heightAt(0f, 0f) + 0.30f, 0f);
+        return new Vec3(0f, heightAt(0f, 0f) + 0.30f, 0f);
     }
 
     public int level() {
@@ -515,6 +537,7 @@ public final class World {
      * @param input player intent for this frame
      */
     public void update(float dt, InputState input) {
+        updateTerrainStream();
         if (hitStop > 0f) {
             hitStop = Math.max(0f, hitStop - dt);
             dt *= 0.15f;
@@ -625,11 +648,11 @@ public final class World {
         // Slow down in water and on steep slopes.
         float wx = player.position.x;
         float wz = player.position.z;
-        float ground = terrain.heightAt(wx, wz);
+        float ground = heightAt(wx, wz);
         if (ground < terrain.waterLevel) {
             speed *= 0.55f;
         }
-        float slope = terrain.slopeAt(wx, wz);
+        float slope = slopeAt(wx, wz);
         if (slope > 0.35f) {
             speed *= 1f - Math.min(0.45f, (slope - 0.35f) * 1.2f);
         }
@@ -641,10 +664,6 @@ public final class World {
         player.velocity = player.velocity.lerp(targetVel, k);
 
         player.position = player.position.add(new Vec3(player.velocity.x * dt, 0f, player.velocity.z * dt));
-
-        // Keep player inside world bounds.
-        float half = terrain.size * 0.5f - 3f;
-        player.position = player.position.clampXZ(half);
 
         if (mag > 0.12f) {
             float wantedYaw = (float) Math.toDegrees(Math.atan2(dx, dz));
@@ -681,7 +700,7 @@ public final class World {
 
     /** Ground height including a small allowance so the model's feet sit on the terrain. */
     public float groundHeight(float x, float z) {
-        return terrain.heightAt(x, z);
+        return heightAt(x, z);
     }
 
     /**
@@ -1395,7 +1414,7 @@ public final class World {
                 // Two creatures join, which is what makes the last phase busy.
                 for (int i = 0; i < 2; i++) {
                     Vec3 at = bossSpawn.add(new Vec3(2.5f * (i == 0 ? -1f : 1f), 0f, 2.5f));
-                    Enemy minion = new Enemy(at.withY(terrain.heightAt(at.x, at.z)), 40f);
+                    Enemy minion = new Enemy(at.withY(heightAt(at.x, at.z)), 40f);
                     if (region.creatures.length > 0) {
                         minion.name = region.creatures[i % region.creatures.length];
                     }
@@ -1650,7 +1669,7 @@ public final class World {
     }
 
     private void updateEnvironment(float dt, InputState in) {
-        float ground = terrain.heightAt(player.position.x, player.position.z);
+        float ground = heightAt(player.position.x, player.position.z);
         boolean inWater = ground < terrain.waterLevel && player.position.y < terrain.waterLevel + 0.6f;
         if (inWater && phase == Phase.PLAYING) {
             waterTime += dt;
@@ -1669,7 +1688,7 @@ public final class World {
         for (int i = projectiles.size() - 1; i >= 0; i--) {
             Projectile p = projectiles.get(i);
             p.update(dt);
-            float ground = terrain.heightAt(p.position.x, p.position.z);
+            float ground = heightAt(p.position.x, p.position.z);
             if (p.life <= 0f || p.position.y < ground - 0.2f) {
                 projectiles.remove(i);
             }

@@ -1,4 +1,8 @@
 import com.laststar.game.core.Vec3;
+import com.laststar.game.core.Mat4;
+import com.laststar.game.art.Skinning;
+import com.laststar.game.art.SkinnedAsset;
+import com.laststar.game.art.SkinnedAssetLoader;
 import com.laststar.game.core.DayNightCycle;
 import com.laststar.game.world.Boss;
 import com.laststar.game.world.CombatKit;
@@ -61,6 +65,8 @@ public final class SystemsTest {
         glCapabilityParsing();
         dayNightCycle();
         weatherSystem();
+        weightedSkinning();
+        skinnedAssetImport();
 
         System.out.println(checks + " checks, " + failures + " failures");
         if (failures > 0) {
@@ -78,6 +84,67 @@ public final class SystemsTest {
         check("magic pink is #F2A1F2", rgb(Style.PINK, 0xf2, 0xa1, 0xf2));
         check("reward gold is #F7B769", rgb(Style.GOLD, 0xf7, 0xb7, 0x69));
         check("primary text is #F5F0FF", rgb(Style.IVORY, 0xf5, 0xf0, 0xff));
+    }
+
+    private static void skinnedAssetImport() throws IOException {
+        StringBuilder data = new StringBuilder();
+        data.append("LSSKIN 1 bones 2 ");
+        data.append("bone root -1 "); appendMatrix(data, 0f);
+        data.append("bone arm 0 "); appendMatrix(data, 0f);
+        data.append("vertices 3 ");
+        for (int v = 0; v < 3; v++) {
+            data.append(v == 1 ? "1 " : "0 ").append("0 0 0 1 0 1 1 1 1 ");
+            data.append("0 0.25 1 0.75 0 0 0 0 ");
+        }
+        data.append("indices 3 0 1 2 clips 1 clip idle 1 2 ");
+        data.append("frame 0 "); appendMatrix(data, 0f); appendMatrix(data, 0f);
+        data.append("frame 1 "); appendMatrix(data, 2f); appendMatrix(data, 0f);
+        SkinnedAsset asset = SkinnedAssetLoader.load(new java.io.StringReader(data.toString()));
+        check("importer reads weighted triangle geometry", asset.mesh.vertexCount() == 3
+                && asset.mesh.triangleCount() == 1);
+        check("importer normalizes four-influence skin weights",
+                Math.abs(asset.weights[0] - 0.25f) < 0.001f
+                        && Math.abs(asset.weights[1] - 0.75f) < 0.001f);
+        Mat4[] posed = asset.clip("idle").sample(0.5f, asset.parents, asset.inverseBind);
+        check("imported animation samples hierarchical joint transforms",
+                Math.abs(posed[1].m[12] - 1f) < 0.001f);
+        boolean rejected = false;
+        try {
+            SkinnedAssetLoader.load(new java.io.StringReader("LSSKIN 99"));
+        } catch (IOException expected) {
+            rejected = true;
+        }
+        check("unsupported skeletal asset versions are rejected", rejected);
+    }
+
+    private static void appendMatrix(StringBuilder out, float tx) {
+        out.append("1 0 0 0 0 1 0 0 0 0 1 0 ")
+                .append(tx).append(" 0 0 1 ");
+    }
+
+    private static void weightedSkinning() {
+        float[] p = {1f, 0f, 0f};
+        float[] n = {0f, 1f, 0f};
+        int[] joints = {0, 1, 0, 0};
+        float[] weights = {0.25f, 0.75f, 0f, 0f};
+        float[] outP = new float[3];
+        float[] outN = new float[3];
+        Skinning.skin(p, n, joints, weights,
+                new Mat4[]{Mat4.translation(2f, 0f, 0f), Mat4.translation(0f, 2f, 0f)},
+                outP, outN);
+        check("skin weights blend transformed joint positions",
+                Math.abs(outP[0] - 1.5f) < 0.001f && Math.abs(outP[1] - 1.5f) < 0.001f);
+        check("skinned normals remain normalized",
+                Math.abs((float) Math.sqrt(outN[0] * outN[0] + outN[1] * outN[1]
+                        + outN[2] * outN[2]) - 1f) < 0.001f);
+        boolean rejected = false;
+        try {
+            Skinning.skin(p, n, joints, new float[]{0f, 0f, 0f, 0f},
+                    new Mat4[]{new Mat4(), new Mat4()}, outP, outN);
+        } catch (IllegalArgumentException expected) {
+            rejected = true;
+        }
+        check("vertices with no skin weights are rejected", rejected);
     }
 
     private static void weatherSystem() {

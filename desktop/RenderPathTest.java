@@ -79,6 +79,7 @@ public final class RenderPathTest {
         GLES20.reset();
         try {
             World world = new World(20261105L);
+            world.terrainStreamer.awaitWindow(5000L);
             SceneRenderer scene = new SceneRenderer();
             // null assets: the renderer must degrade to "no props", not throw.
             scene.init(world, null);
@@ -92,6 +93,7 @@ public final class RenderPathTest {
         // 5. Drawing a frame must not throw and must issue draw calls.
         try {
             World world = new World(20261105L);
+            world.terrainStreamer.awaitWindow(5000L);
             world.beginRun();
             Camera camera = new Camera();
             camera.snapBehind(world);
@@ -108,7 +110,7 @@ public final class RenderPathTest {
             System.out.println("- frame: " + GLES20.draws + " draw calls");
             checks++;
             if (GLES20.bufferUploads == 0 || GLES20.bufferOffsetDraws == 0
-                    || GLES20.clientPointerCalls != 0) {
+                    || GLES20.streamUploads == 0 || GLES20.clientPointerCalls != 0) {
                 failures++;
                 System.out.println("  FAIL VBO path did not upload and draw indexed GPU buffers");
             }

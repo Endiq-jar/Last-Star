@@ -380,6 +380,7 @@ public final class SaveGame {
         world.refreshEquipment();
         world.player.position = new com.laststar.game.core.Vec3(playerX, playerY, playerZ);
         world.player.yaw = playerYaw;
+        world.updateTerrainStream();
         // Open anything the restored state has made available, so a loaded
         // save is playable immediately rather than after the next completion.
         world.quests.refreshAvailability();

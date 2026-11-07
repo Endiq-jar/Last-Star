@@ -116,6 +116,31 @@ public final class Mesh {
         return sb;
     }
 
+    /** Releases this mesh's GPU objects; call only while its GL context is current. */
+    public void dispose() {
+        int[] ids = {positionVbo, normalVbo, colorVbo, waveVbo, indexVbo};
+        GLES20.glDeleteBuffers(ids.length, ids, 0);
+    }
+
+    /** Replaces dynamic vertex streams while preserving immutable indices. */
+    public void updateDynamic(float[] newPositions, float[] newNormals, float[] newColors) {
+        if (newPositions != null) updateBuffer(positions, positionVbo, newPositions);
+        if (newNormals != null && normals != null) updateBuffer(normals, normalVbo, newNormals);
+        if (newColors != null && colors != null) updateBuffer(colors, colorVbo, newColors);
+    }
+
+    private static void updateBuffer(FloatBuffer target, int vbo, float[] values) {
+        target.position(0);
+        target.put(values);
+        target.position(0);
+        if (vbo != 0) {
+            GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vbo);
+            GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, values.length * 4,
+                    target, GLES20.GL_STREAM_DRAW);
+            GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+        }
+    }
+
     public void draw() {
         if (usesVbos()) {
             GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, indexVbo);

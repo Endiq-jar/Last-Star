@@ -50,6 +50,7 @@ public final class GLES20 {
     public static final java.util.List<String> compiledShaders = new java.util.ArrayList<>();
     public static int draws;
     public static int bufferUploads;
+    public static int streamUploads;
     public static int bufferOffsetDraws;
     public static int clientPointerCalls;
     public static boolean buffersAvailable = true;
@@ -66,6 +67,7 @@ public final class GLES20 {
         nextId = 1;
         draws = 0;
         bufferUploads = 0;
+        streamUploads = 0;
         bufferOffsetDraws = 0;
         clientPointerCalls = 0;
         buffersAvailable = true;
@@ -198,6 +200,7 @@ public final class GLES20 {
 
     public static void glBufferData(int target, int size, java.nio.Buffer data, int usage) {
         bufferUploads++;
+        if (usage == GL_STREAM_DRAW) streamUploads++;
     }
 
     public static void glDeleteBuffers(int n, int[] b, int off) {

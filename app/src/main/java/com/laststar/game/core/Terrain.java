@@ -25,9 +25,17 @@ public final class Terrain {
     public final byte[] blend;
     /** Baked flat lookup so gameplay loops do not need to re-derive it. */
     private final float cellSize;
+    /** Global lower-left sample coordinate; chunk tiles share exact edges. */
+    public final float originX;
+    public final float originZ;
+    /** Radius used for region-scale shaping, shared by every streamed tile. */
+    public final float worldSpanSize;
+    private final Noise baseNoise;
+    private final Noise detailNoise;
+    private final Noise ridgeNoise;
 
     public Terrain(float size, int segments, long seed) {
-        this(size, segments, seed, null);
+        this(size, segments, seed, null, -size * 0.5f, -size * 0.5f, size);
     }
 
     /**
@@ -41,38 +49,65 @@ public final class Terrain {
      */
     public static Terrain forRegion(Elaris.Region region, float size, int segments,
                                     long seed) {
-        return new Terrain(size, segments, seed, region);
+        return new Terrain(size, segments, seed, region,
+                -size * 0.5f, -size * 0.5f, size);
     }
 
-    private Terrain(float size, int segments, long seed, Elaris.Region region) {
+    /** Builds one globally aligned tile for the endless regional terrain stream. */
+    public static Terrain chunk(Elaris.Region region, float size, int segments,
+                                long seed, int chunkX, int chunkZ, float worldSpanSize) {
+        return new Terrain(size, segments, seed, region,
+                chunkX * size - size * 0.5f,
+                chunkZ * size - size * 0.5f,
+                worldSpanSize);
+    }
+
+    private Terrain(float size, int segments, long seed, Elaris.Region region,
+                    float originX, float originZ, float worldSpanSize) {
         this.size = size;
         this.segments = segments;
         this.cellSize = size / segments;
+        this.originX = originX;
+        this.originZ = originZ;
+        this.worldSpanSize = Math.max(size, worldSpanSize);
         this.region = region;
         this.waterLevel = region == null ? -0.55f : region.waterLevel;
         this.heights = new float[(segments + 1) * (segments + 1)];
         this.blend = new byte[(segments + 1) * (segments + 1)];
-        generate(seed);
+        this.baseNoise = new Noise(seed);
+        this.detailNoise = new Noise(seed ^ 0x9E3779B97F4A7C15L);
+        this.ridgeNoise = new Noise(seed + 7717L);
+        generate();
     }
 
     /** The region this terrain was built for, or null for the default. */
     public final Elaris.Region region;
 
-    private void generate(long seed) {
-        Noise base = new Noise(seed);
-        Noise detail = new Noise(seed ^ 0x9E3779B97F4A7C15L);
-        Noise ridge = new Noise(seed + 7717L);
+    private void generate() {
         int n = segments + 1;
         for (int gz = 0; gz < n; gz++) {
             for (int gx = 0; gx < n; gx++) {
-                float wx = (gx * cellSize) - size * 0.5f;
-                float wz = (gz * cellSize) - size * 0.5f;
-                float h = height(wx, wz, base, detail, ridge);
-                heights[gz * n + gx] = h;
-                float bl = Noise.clamp01(0.35f + 0.8f * detail.fbm(wx * 0.06f, wz * 0.06f, 3, 2f, 0.5f));
+                float wx = worldX(gx);
+                float wz = worldZ(gz);
+                heights[gz * n + gx] = heightWorld(wx, wz);
+                float bl = Noise.clamp01(0.35f + 0.8f * detailNoise.fbm(
+                        wx * 0.06f, wz * 0.06f, 3, 2f, 0.5f));
                 blend[gz * n + gx] = (byte) (bl * 127f);
             }
         }
+    }
+
+    /** Global procedural height function shared at every chunk boundary. */
+    public float heightWorld(float wx, float wz) {
+        return height(wx, wz, baseNoise, detailNoise, ridgeNoise);
+    }
+
+    public float worldX(int gx) {
+        return originX + gx * cellSize;
+    }
+
+    public float worldZ(int gz) {
+        return originZ + gz * cellSize;
     }
 
     private float height(float wx, float wz, Noise base, Noise detail, Noise ridge) {
@@ -95,7 +130,7 @@ public final class Terrain {
         // can never turn into a wall. The tall, dramatic peaks are a separate
         // decorative range outside the map (see Geometry.mountainRange) -- they
         // need no collision, so they can be as huge as the view wants.
-        float radial = (float) Math.sqrt(wx * wx + wz * wz) / (size * 0.5f);
+        float radial = (float) Math.sqrt(wx * wx + wz * wz) / (worldSpanSize * 0.5f);
         float rim = Noise.smoothstep(rimStart, 0.92f, radial);
         h += ridge.ridged(nx * 0.62f + 13.1f, nz * 0.62f - 7.7f, 4) * ridgeAmp * rim;
 
@@ -128,8 +163,8 @@ public final class Terrain {
      */
     public float heightAt(float wx, float wz) {
         int n = segments + 1;
-        float fx = (wx + size * 0.5f) / cellSize;
-        float fz = (wz + size * 0.5f) / cellSize;
+        float fx = (wx - originX) / cellSize;
+        float fz = (wz - originZ) / cellSize;
         if (fx < 0f) {
             fx = 0f;
         }
@@ -160,10 +195,10 @@ public final class Terrain {
     /** Approximate surface normal via central differences (not normalised). */
     public Vec3 normalAt(float wx, float wz) {
         float d = cellSize;
-        float hl = heightAt(wx - d, wz);
-        float hr = heightAt(wx + d, wz);
-        float hd = heightAt(wx, wz - d);
-        float hu = heightAt(wx, wz + d);
+        float hl = heightWorld(wx - d, wz);
+        float hr = heightWorld(wx + d, wz);
+        float hd = heightWorld(wx, wz - d);
+        float hu = heightWorld(wx, wz + d);
         return new Vec3(hl - hr, 2f * d, hd - hu).normalized();
     }
 
@@ -178,8 +213,8 @@ public final class Terrain {
 
     public float blendAt(float wx, float wz) {
         int n = segments + 1;
-        float fx = Noise.clamp((wx + size * 0.5f) / cellSize, 0f, segments - 1e-4f);
-        float fz = Noise.clamp((wz + size * 0.5f) / cellSize, 0f, segments - 1e-4f);
+        float fx = Noise.clamp((wx - originX) / cellSize, 0f, segments - 1e-4f);
+        float fz = Noise.clamp((wz - originZ) / cellSize, 0f, segments - 1e-4f);
         int x = (int) fx;
         int z = (int) fz;
         float v = (float) (blend[z * n + x] & 0xFF) / 127f;

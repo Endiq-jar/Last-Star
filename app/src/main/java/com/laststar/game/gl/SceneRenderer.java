@@ -3,9 +3,12 @@ package com.laststar.game.gl;
 import android.opengl.GLES20;
 
 import com.laststar.game.art.HumanoidRig;
+import com.laststar.game.art.SkinnedMesh;
 import com.laststar.game.core.Camera;
 import com.laststar.game.core.Mat4;
 import com.laststar.game.core.Noise;
+import com.laststar.game.core.Terrain;
+import com.laststar.game.core.TerrainChunkStreamer;
 import com.laststar.game.core.Vec3;
 import com.laststar.game.world.Enemy;
 import com.laststar.game.world.Pickup;
@@ -43,10 +46,12 @@ public final class SceneRenderer {
     private GlProgram sceneProgram;
     private GlProgram skyProgram;
 
-    private Mesh terrainMesh;
+    private final java.util.Map<Long, Mesh> terrainMeshes = new java.util.LinkedHashMap<>();
+    private final java.util.Map<Long, Terrain> terrainSources = new java.util.HashMap<>();
+    private int terrainRegionIndex = -1;
+    private boolean terrainWasHollow;
+    private Terrain skirtTerrainSource;
     private Mesh hollowCeilingMesh;
-    /** Identity guard for rebuilding terrain and its scatter plan after travel. */
-    private com.laststar.game.core.Terrain terrainRef;
     private Mesh waterMesh;
     /** Ground fan beyond the playable map, under the mountain ring. */
     private Mesh skirtMesh;
@@ -68,8 +73,8 @@ public final class SceneRenderer {
     private PropPlanner props;
     private Mesh[] propMeshes = new Mesh[0];
 
-    private Mesh[] playerParts;
-    private Mesh[] wardenParts;
+    private SkinnedMesh playerSkin;
+    private SkinnedMesh wardenSkin;
     private Mesh[] pickups;
 
     private final Mat4[] poseMatrices = new Mat4[HumanoidRig.PART_COUNT];
@@ -95,17 +100,19 @@ public final class SceneRenderer {
         sceneProgram = GlProgram.create(Shaders.SCENE_VERT, Shaders.SCENE_FRAG);
         skyProgram = GlProgram.create(Shaders.SKY_VERT, Shaders.SKY_FRAG);
 
-        terrainRef = world.terrain;
-        terrainMesh = toMesh(Geometry.terrain(world.terrain));
+        terrainRegionIndex = world.regionIndex;
+        terrainWasHollow = world.inHollow;
+        syncTerrainMeshes(world);
         hollowCeilingMesh = toMesh(Geometry.hollowCeiling(220f, 35f, 40));
-        waterMesh = toMesh(Geometry.waterPlane(world.terrain.size * 1.4f, 44, world.terrain.waterLevel));
+        waterMesh = toMesh(Geometry.waterPlane(TerrainChunkStreamer.CHUNK_SIZE * 3f,
+                64, world.terrain.waterLevel));
         // Starts inside the terrain so there is no crack at the seam, and runs
         // out past the near mountain ring so its feet land on ground.
         skirtMesh = toMesh(Geometry.distantGround(
-                world.terrain.size * 0.48f, 620f, 64,
-                world.terrain.heightAt(world.terrain.size * 0.48f, 0f) - 0.6f,
+                TerrainChunkStreamer.CHUNK_SIZE * 1.45f, 620f, 64,
+                world.heightAt(world.player.position.x, world.player.position.z) - 0.6f,
                 26f, 0.30f, 0.40f, 0.32f));
-
+        skirtTerrainSource = world.terrain;
 
         sphereMesh = toMesh(Geometry.sphere(1f, 10, 14, 1f, 1f, 1f, 1f));
         shardMesh = toMesh(Geometry.starShard(0.42f, 1f, 0.92f, 0.55f));
@@ -122,13 +129,13 @@ public final class SceneRenderer {
         try {
             playerRig = HumanoidRig.player();
             wardenRig = HumanoidRig.warden();
-            playerParts = rigMeshes(playerRig);
-            wardenParts = rigMeshes(wardenRig);
+            playerSkin = skinnedRig(playerRig);
+            wardenSkin = skinnedRig(wardenRig);
         } catch (RuntimeException e) {
             android.util.Log.e("LastStar", "character rig unavailable", e);
             lastError = "rig: " + e.getMessage();
-            playerParts = new Mesh[0];
-            wardenParts = new Mesh[0];
+            playerSkin = null;
+            wardenSkin = null;
         }
         pickups = new Mesh[]{
                 toMesh(Geometry.octahedron(0.28f, 0.35f, 0.95f, 0.62f)),
@@ -142,24 +149,64 @@ public final class SceneRenderer {
         buildSkyQuad();
     }
 
-    /** Rebuild the real ground mesh and environment when travel swaps terrain. */
+    /** Synchronizes the bounded terrain mesh cache with the current 3x3 stream. */
     private void ensureRegionMeshes(World world) {
-        if (terrainRef == world.terrain) {
-            return;
+        if (terrainRegionIndex != world.regionIndex || terrainWasHollow != world.inHollow) {
+            for (Mesh mesh : terrainMeshes.values()) mesh.dispose();
+            terrainMeshes.clear();
+            terrainSources.clear();
+            terrainRegionIndex = world.regionIndex;
+            terrainWasHollow = world.inHollow;
+            if (waterMesh != null) waterMesh.dispose();
+            if (skirtMesh != null) skirtMesh.dispose();
+            if (mountainMesh != null) mountainMesh.dispose();
+            waterMesh = toMesh(Geometry.waterPlane(TerrainChunkStreamer.CHUNK_SIZE * 3f,
+                    64, world.terrain.waterLevel));
+            skirtMesh = null;
+            skirtTerrainSource = null;
+            mountainMesh = toMesh(Geometry.layeredRange(520f, 96f, 56,
+                    world.worldSeed ^ 0x5A5A5A5AL ^ world.regionIndex, 230f));
+            if (models != null) {
+                props = new PropPlanner(models, world.terrain,
+                        ((long) world.worldSeed << 12) ^ world.regionIndex * 7919L);
+            }
         }
-        terrainRef = world.terrain;
-        terrainMesh = toMesh(Geometry.terrain(world.terrain));
-        waterMesh = toMesh(Geometry.waterPlane(world.terrain.size * 1.4f, 44,
-                world.terrain.waterLevel));
-        skirtMesh = toMesh(Geometry.distantGround(
-                world.terrain.size * 0.48f, 620f, 64,
-                world.terrain.heightAt(world.terrain.size * 0.48f, 0f) - 0.6f,
-                26f, 0.30f, 0.40f, 0.32f));
-        mountainMesh = toMesh(Geometry.layeredRange(520f, 96f, 56,
-                world.worldSeed ^ 0x5A5A5A5AL ^ world.regionIndex, 230f));
-        if (models != null) {
-            props = new PropPlanner(models, world.terrain,
-                    ((long) world.worldSeed << 12) ^ world.regionIndex * 7919L);
+        syncTerrainMeshes(world);
+        if (skirtTerrainSource != world.terrain) {
+            if (skirtMesh != null) skirtMesh.dispose();
+            skirtMesh = toMesh(Geometry.distantGround(
+                    TerrainChunkStreamer.CHUNK_SIZE * 1.45f, 620f, 64,
+                    world.heightAt(world.player.position.x, world.player.position.z) - 0.6f,
+                    26f, 0.30f, 0.40f, 0.32f));
+            skirtTerrainSource = world.terrain;
+        }
+    }
+
+    private void syncTerrainMeshes(World world) {
+        java.util.List<Terrain> chunks = world.inHollow
+                ? java.util.Collections.singletonList(world.terrain)
+                : world.terrainStreamer.loadedChunks();
+        java.util.Set<Long> active = new java.util.HashSet<>();
+        for (Terrain chunk : chunks) {
+            int cx = Math.round((chunk.originX + chunk.size * 0.5f) / chunk.size);
+            int cz = Math.round((chunk.originZ + chunk.size * 0.5f) / chunk.size);
+            long key = ((long) cx << 32) ^ (cz & 0xffffffffL);
+            active.add(key);
+            if (terrainSources.get(key) != chunk) {
+                Mesh old = terrainMeshes.remove(key);
+                if (old != null) old.dispose();
+                terrainMeshes.put(key, toMesh(Geometry.terrain(chunk)));
+                terrainSources.put(key, chunk);
+            }
+        }
+        java.util.Iterator<java.util.Map.Entry<Long, Mesh>> it = terrainMeshes.entrySet().iterator();
+        while (it.hasNext()) {
+            java.util.Map.Entry<Long, Mesh> entry = it.next();
+            if (!active.contains(entry.getKey())) {
+                entry.getValue().dispose();
+                terrainSources.remove(entry.getKey());
+                it.remove();
+            }
         }
     }
 
@@ -193,13 +240,13 @@ public final class SceneRenderer {
         }
     }
 
-    private Mesh[] rigMeshes(HumanoidRig rig) {
-        return new Mesh[]{
-                toMesh(rig.torso.mesh), toMesh(rig.hips.mesh), toMesh(rig.head.mesh),
-                toMesh(rig.leftArm.mesh), toMesh(rig.rightArm.mesh),
-                toMesh(rig.leftLeg.mesh), toMesh(rig.rightLeg.mesh),
-                toMesh(rig.weapon.mesh), toMesh(rig.cape.mesh)
-        };
+    private SkinnedMesh skinnedRig(HumanoidRig rig) {
+        return SkinnedMesh.fromRigidParts(new MeshData[]{
+                rig.torso.mesh, rig.hips.mesh, rig.head.mesh,
+                rig.leftArm.mesh, rig.rightArm.mesh,
+                rig.leftLeg.mesh, rig.rightLeg.mesh,
+                rig.weapon.mesh, rig.cape.mesh
+        });
     }
 
     private static Mesh toMesh(MeshData d) {
@@ -249,7 +296,8 @@ public final class SceneRenderer {
         sceneProgram.setFog(sky.fogDensity, sky.horizonR, sky.horizonG, sky.horizonB);
         sceneProgram.setVec3("uCamPos", camera.position.x, camera.position.y, camera.position.z);
 
-        // Terrain.
+        // Streamed terrain tiles share global sample coordinates and meet at
+        // exact, noise-identical boundaries.
         modelMatrix.identity();
         mvp.setMultiply(proj, view);
         sceneProgram.setMvp(mvp.m);
@@ -259,7 +307,7 @@ public final class SceneRenderer {
         sceneProgram.setTintAmount(0f);
         sceneProgram.setTime(time);
         sceneProgram.setFloat("uWaveAmp", 0f);
-        drawMesh(terrainMesh);
+        for (Mesh mesh : terrainMeshes.values()) drawMesh(mesh);
         if (world.inHollow) {
             modelMatrix.identity();
             mvp.setMultiply(proj, view);
@@ -298,6 +346,8 @@ public final class SceneRenderer {
      */
     private void drawSkirt(Camera camera) {
         modelMatrix.identity();
+        modelMatrix.m[12] = camera.position.x;
+        modelMatrix.m[14] = camera.position.z;
         tmp.setMultiply(frameViewProj, modelMatrix);
         sceneProgram.setMvp(tmp.m);
         sceneProgram.setModel(modelMatrix.m);
@@ -587,7 +637,7 @@ public final class SceneRenderer {
             modelAt(e.position, e.yaw);
             wardenRig.pose(poseMatrices, modelMatrix, e.animPhase, moveAmount, attack,
                     !e.onGround, e.hitFlash);
-            drawRig(wardenParts, 1f, 0.0f);
+            drawSkinned(wardenSkin, 1f, 0f);
         }
     }
 
@@ -600,7 +650,11 @@ public final class SceneRenderer {
         playerRig.pose(poseMatrices, modelMatrix, p.animPhase, moveAmount, p.attackFraction(),
                 !p.onGround, p.hitFlash);
         float flashBlend = p.invulnerability > 0f ? 0.35f + 0.25f * (float) Math.sin(time * 26f) : 0f;
-        drawRig(playerParts, 1f, flashBlend, p.skinColour(), 0.85f);
+        if (playerSkin != null) {
+            float[] skin = p.skinColour();
+            playerSkin.setJointTint(HEAD_PART, skin[0], skin[1], skin[2], 0.85f);
+            drawSkinned(playerSkin, 1f, flashBlend);
+        }
     }
 
     /** Camera-projection cache refreshed once per frame for the prop passes. */
@@ -616,32 +670,22 @@ public final class SceneRenderer {
         modelMatrix.setMultiply(Mat4.translation(pos.x, pos.y, pos.z), Mat4.rotationY(yawDeg));
     }
 
-    private void drawRig(Mesh[] parts, float alpha, float hitBlend) {
-        drawRig(parts, alpha, hitBlend, null, 0f);
-    }
-
-    /**
-     * Draws a rig, optionally blending one part (the head) towards the skin
-     * colour the player picked in the wardrobe.
-     */
-    private void drawRig(Mesh[] parts, float alpha, float hitBlend,
-                         float[] skin, float skinBlend) {
+    private void drawSkinned(SkinnedMesh skin, float alpha, float hitBlend) {
+        if (skin == null) return;
+        skin.update(poseMatrices);
+        // Skinning outputs world-space positions, so the draw matrix is just
+        // camera projection * view (not a second model transform).
+        sceneProgram.setMvp(frameViewProj.m);
+        modelMatrix.identity();
+        sceneProgram.setModel(modelMatrix.m);
         sceneProgram.setAlpha(alpha);
-        sceneProgram.setTintAmount(1f);
-        for (int i = 0; i < parts.length; i++) {
-            Mat4 part = poseMatrices[i];
-            rigScratch.setMultiply(frameViewProj, part);
-            sceneProgram.setMvp(rigScratch.m);
-            sceneProgram.setModel(part.m);
-            if (hitBlend > 0f) {
-                sceneProgram.setTint(1f, 0.35f, 0.30f, hitBlend);
-            } else if (skin != null && skinBlend > 0f && i == HEAD_PART) {
-                sceneProgram.setTint(skin[0], skin[1], skin[2], skinBlend);
-            } else {
-                sceneProgram.setTint(0f, 0f, 0f, 0f);
-            }
-            drawMesh(parts[i]);
+        sceneProgram.setEmissive(0f);
+        if (hitBlend > 0f) {
+            sceneProgram.setTint(1f, 0.35f, 0.30f, hitBlend);
+        } else {
+            sceneProgram.setTintAmount(0f);
         }
+        drawMesh(skin.mesh);
         sceneProgram.setAlpha(1f);
         sceneProgram.setTintAmount(0f);
     }

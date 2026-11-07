@@ -60,7 +60,7 @@ public final class Camera {
         float step = 0.5f;
         for (float d = MIN_DISTANCE; d <= defaultDistance; d += step) {
             Vec3 probe = target.addScaled(offset, -d);
-            if (probe.y < world.terrain.heightAt(probe.x, probe.z) + 0.35f) {
+            if (probe.y < world.heightAt(probe.x, probe.z) + 0.35f) {
                 wanted = Math.max(MIN_DISTANCE, d - step);
                 break;
             }
@@ -68,7 +68,7 @@ public final class Camera {
         distance += (wanted - distance) * (1f - (float) Math.exp(-9f * dt));
 
         Vec3 camPos = target.addScaled(offset, -distance);
-        float ground = world.terrain.heightAt(camPos.x, camPos.z) + 0.55f;
+        float ground = world.heightAt(camPos.x, camPos.z) + 0.55f;
         if (camPos.y < ground) {
             camPos = camPos.withY(ground);
         }
