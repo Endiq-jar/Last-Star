@@ -9,6 +9,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.zip.CRC32;
 
 /**
  * The whole run, as bytes.
@@ -27,8 +28,8 @@ import java.io.IOException;
  */
 public final class SaveGame {
 
-    /** Bumped whenever the layout changes, so an old save is rejected cleanly. */
-    public static final int VERSION = 3;
+    /** Current layout; older v2/v3 snapshots are migrated on read. */
+    public static final int VERSION = 4;
     private static final int MAGIC = 0x4C535356;   // "LSSV"
 
     // --- what is saved -------------------------------------------------------
@@ -167,6 +168,16 @@ public final class SaveGame {
             // compiler needs the catch.
             throw new IllegalStateException("save failed", e);
         }
+        byte[] payload = bytes.toByteArray();
+        CRC32 checksum = new CRC32();
+        checksum.update(payload);
+        try {
+            DataOutputStream trailer = new DataOutputStream(bytes);
+            trailer.writeInt((int) checksum.getValue());
+            trailer.flush();
+        } catch (IOException e) {
+            throw new IllegalStateException("save checksum failed", e);
+        }
         return bytes.toByteArray();
     }
 
@@ -178,14 +189,36 @@ public final class SaveGame {
      *                     like and must not crash the game
      */
     public static SaveGame fromBytes(byte[] data) throws IOException {
-        DataInputStream in = new DataInputStream(new ByteArrayInputStream(data));
-        if (in.readInt() != MAGIC) {
+        if (data == null || data.length < 8) {
+            throw new IOException("save is truncated");
+        }
+        DataInputStream header = new DataInputStream(new ByteArrayInputStream(data));
+        if (header.readInt() != MAGIC) {
             throw new IOException("not a Last Star save");
         }
-        int version = in.readInt();
-        if (version != 2 && version != VERSION) {
-            throw new IOException("save version " + version + ", expected 2 or " + VERSION);
+        int version = header.readInt();
+        if (version != 2 && version != 3 && version != VERSION) {
+            throw new IOException("save version " + version + ", expected 2, 3 or " + VERSION);
         }
+        int payloadLength = data.length;
+        if (version == VERSION) {
+            if (data.length < 12) {
+                throw new IOException("save checksum is missing");
+            }
+            CRC32 checksum = new CRC32();
+            checksum.update(data, 0, data.length - 4);
+            int savedChecksum = ((data[data.length - 4] & 0xff) << 24)
+                    | ((data[data.length - 3] & 0xff) << 16)
+                    | ((data[data.length - 2] & 0xff) << 8)
+                    | (data[data.length - 1] & 0xff);
+            if ((int) checksum.getValue() != savedChecksum) {
+                throw new IOException("save checksum mismatch");
+            }
+            payloadLength -= 4;
+        }
+        DataInputStream in = new DataInputStream(new ByteArrayInputStream(data, 0, payloadLength));
+        in.readInt(); // magic already checked
+        in.readInt(); // version already checked
         SaveGame s = new SaveGame();
         s.region = in.readInt();
         s.gold = in.readInt();
@@ -244,7 +277,50 @@ public final class SaveGame {
             s.worn[i] = in.readInt();
         }
         s.baseCapacity = in.readFloat();
+        if (in.available() != 0) {
+            throw new IOException("unexpected trailing save data");
+        }
+        s.validate();
         return s;
+    }
+
+    private void validate() throws IOException {
+        if (region < 0 || region >= com.laststar.game.world.lore.Elaris.REGION_COUNT
+                || level < 1 || gold < 0 || kills < 0 || deaths < 0
+                || shardsCollected < 0 || runsCompleted < 0) {
+            throw new IOException("save contains invalid progress values");
+        }
+        if (!finite(lightCapacity) || lightCapacity < 0f
+                || !finite(baseCapacity) || baseCapacity < 0f
+                || !finite(playerX) || !finite(playerY) || !finite(playerZ)
+                || !finite(playerYaw)) {
+            throw new IOException("save contains invalid player values");
+        }
+        for (int i = 0; i < spellLevel.length; i++) {
+            if (spellLevel[i] < 1 || !finite(spellXp[i]) || spellXp[i] < 0f) {
+                throw new IOException("save contains invalid spell progress");
+            }
+        }
+        for (int i = 0; i < equipped.length; i++) {
+            if (equipped[i] < -1 || equipped[i] >= awake.length) {
+                throw new IOException("save contains invalid equipped spell");
+            }
+        }
+        for (int i = 0; i < questState.length; i++) {
+            if (questState[i] < QuestLog.OPEN || questState[i] > QuestLog.LOCKED
+                    || questProgress[i] < 0) {
+                throw new IOException("save contains invalid quest progress");
+            }
+        }
+        for (int i = 0; i < worn.length; i++) {
+            if (worn[i] < -1 || worn[i] >= owned.length) {
+                throw new IOException("save contains invalid equipment slot");
+            }
+        }
+    }
+
+    private static boolean finite(float value) {
+        return !Float.isNaN(value) && !Float.isInfinite(value);
     }
 
     /**

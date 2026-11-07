@@ -1239,6 +1239,7 @@ public final class SystemsTest {
         check("a save has a sane size", bytes.length > 100 && bytes.length < 8000);
 
         SaveGame loaded = SaveGame.fromBytes(bytes);
+        check("new saves carry version 4 checksummed format", bytes[7] == 4);
         check("gold survives", loaded.gold == 1234);
         check("kills survive", loaded.kills == 17);
         check("deaths survive", loaded.deaths == 3);
@@ -1268,6 +1269,27 @@ public final class SystemsTest {
             rejectedTruncated = true;
         }
         check("a half-written save is rejected", rejectedTruncated);
+
+        byte[] damaged = bytes.clone();
+        damaged[20] ^= 0x20;
+        boolean rejectedChecksum = false;
+        try {
+            SaveGame.fromBytes(damaged);
+        } catch (IOException e) {
+            rejectedChecksum = e.getMessage().contains("checksum");
+        }
+        check("single-byte corruption fails checksum validation", rejectedChecksum);
+
+        // Version 2 and 3 saves remain readable so this update does not erase
+        // existing player progress. v2 predates the in-Hollow field.
+        byte[] v3 = java.util.Arrays.copyOf(bytes, bytes.length - 4);
+        v3[7] = 3;
+        check("version 3 saves remain readable", SaveGame.fromBytes(v3).gold == 1234);
+        byte[] v2 = new byte[v3.length - 1];
+        System.arraycopy(v3, 0, v2, 0, 36);
+        System.arraycopy(v3, 37, v2, 36, v3.length - 37);
+        v2[7] = 2;
+        check("version 2 saves remain readable", SaveGame.fromBytes(v2).gold == 1234);
 
         // And it must actually apply to a fresh world.
         World fresh = new World(20260101L);
