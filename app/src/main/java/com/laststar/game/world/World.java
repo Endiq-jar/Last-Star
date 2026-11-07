@@ -68,6 +68,8 @@ public final class World {
     public Terrain terrain;
     /** Resident rolling 3x3 procedural terrain window for the outdoor world. */
     public final TerrainChunkStreamer terrainStreamer;
+    /** Solid wall footprints for the current region's fantasy hamlet. */
+    public final List<BuildingCollider> buildingColliders = new ArrayList<BuildingCollider>();
     public final Player player;
     public final List<Enemy> enemies = new ArrayList<>();
     public final List<Shard> shards = new ArrayList<>();
@@ -160,6 +162,7 @@ public final class World {
         this.terrain = terrainStreamer.center();
         this.player = new Player(spawnPoint());
         this.player.yaw = 180f;
+        rebuildBuildingColliders();
         quests.refreshAvailability();
         buildLevel(1);
     }
@@ -178,6 +181,15 @@ public final class World {
     public float slopeAt(float worldX, float worldZ) {
         return inHollow ? terrain.slopeAt(worldX, worldZ)
                 : terrainStreamer.slopeAt(worldX, worldZ);
+    }
+
+    /** Rebuilds the same deterministic house footprints used by PropPlanner. */
+    private void rebuildBuildingColliders() {
+        buildingColliders.clear();
+        if (!inHollow) {
+            long layoutSeed = ((long) worldSeed << 12) ^ regionIndex * 7919L;
+            buildingColliders.addAll(VillageLayout.colliders(terrain, layoutSeed));
+        }
     }
 
     /** Keeps the rolling terrain window centred on the player's current tile. */
@@ -205,6 +217,7 @@ public final class World {
         region = Elaris.regions()[index];
         terrainStreamer.reset(region, worldSeed + index * 7919L);
         terrain = terrainStreamer.center();
+        rebuildBuildingColliders();
         player.respawn(spawnPoint());
         buildLevel(level());
         quests.report(QuestCorpus.Kind.TRAVEL, region.name, 1);
@@ -235,6 +248,7 @@ public final class World {
         region = Elaris.HOLLOW_DEPTHS;
         terrain = Terrain.forRegion(region, 180f, 110,
                 worldSeed ^ 0x484F4C4C4F57L);
+        rebuildBuildingColliders();
         player.respawn(spawnPoint());
         buildLevel(Math.max(level, region.minLevel));
         phase = Phase.PLAYING;
@@ -253,6 +267,7 @@ public final class World {
         region = Elaris.regions()[regionIndex];
         terrainStreamer.reset(region, worldSeed + regionIndex * 7919L);
         terrain = terrainStreamer.center();
+        rebuildBuildingColliders();
         player.respawn(spawnPoint());
         buildLevel(Math.max(1, level));
         phase = Phase.PLAYING;
@@ -353,7 +368,7 @@ public final class World {
             if (h < terrain.waterLevel + 0.6f) {
                 continue;
             }
-            if (slopeAt(x, z) > 0.55f) {
+            if (slopeAt(x, z) > 0.55f || isBuildingBlocked(x, z, 1.25f)) {
                 continue;
             }
             boolean tooClose = false;
@@ -374,9 +389,14 @@ public final class World {
         // Ensure exactly SHARD_COUNT even on pathological seeds.
         while (shards.size() < SHARD_COUNT) {
             float angle = (float) (shards.size() * Math.PI * 0.7);
-            float dist = 18f + shards.size() * 9f;
+            float dist = 30f + shards.size() * 9f;
             float x = (float) Math.cos(angle) * dist;
             float z = (float) Math.sin(angle) * dist;
+            while (isBuildingBlocked(x, z, 1.25f)) {
+                dist += 3f;
+                x = (float) Math.cos(angle) * dist;
+                z = (float) Math.sin(angle) * dist;
+            }
             float h = heightAt(x, z);
             shards.add(new Shard(new Vec3(x, h + 1.15f, z), shards.size()));
         }
@@ -663,7 +683,16 @@ public final class World {
         float k = 1f - (float) Math.exp(-accel * dt);
         player.velocity = player.velocity.lerp(targetVel, k);
 
-        player.position = player.position.add(new Vec3(player.velocity.x * dt, 0f, player.velocity.z * dt));
+        Vec3 beforeMove = player.position;
+        Vec3 moved = movePlayerHorizontally(beforeMove,
+                player.velocity.x * dt, player.velocity.z * dt);
+        if (Math.abs(moved.x - beforeMove.x) < 1e-5f
+                || Math.abs(moved.z - beforeMove.z) < 1e-5f) {
+            player.velocity = new Vec3(Math.abs(moved.x - beforeMove.x) < 1e-5f
+                    ? 0f : player.velocity.x, player.velocity.y,
+                    Math.abs(moved.z - beforeMove.z) < 1e-5f ? 0f : player.velocity.z);
+        }
+        player.position = moved;
 
         if (mag > 0.12f) {
             float wantedYaw = (float) Math.toDegrees(Math.atan2(dx, dz));
@@ -703,6 +732,78 @@ public final class World {
         return heightAt(x, z);
     }
 
+    /** Substepped horizontal collision against the sampled heightfield and static structures. */
+    private Vec3 movePlayerHorizontally(Vec3 from, float dx, float dz) {
+        float distance = (float) Math.sqrt(dx * dx + dz * dz);
+        int steps = Math.max(1, (int) Math.ceil(distance / 0.22f));
+        float sx = dx / steps, sz = dz / steps;
+        Vec3 at = from;
+        float[] normal = new float[2];
+        for (int i = 0; i < steps; i++) {
+            float beforeX = at.x, beforeZ = at.z;
+            float nx = at.x + sx;
+            if (canPlayerOccupy(nx, at.z, at.x, at.z)) at = new Vec3(nx, at.y, at.z);
+            float nz = at.z + sz;
+            if (canPlayerOccupy(at.x, nz, at.x, at.z)) at = new Vec3(at.x, at.y, nz);
+            if (at.x == beforeX && at.z == beforeZ) {
+                float targetX = at.x + sx, targetZ = at.z + sz;
+                for (int c = 0; c < buildingColliders.size(); c++) {
+                    BuildingCollider wall = buildingColliders.get(c);
+                    if (!wall.blocks(targetX, targetZ, player.radius)) continue;
+                    wall.normalAt(targetX, targetZ, normal);
+                    float intoWall = sx * normal[0] + sz * normal[1];
+                    float slideX = sx - intoWall * normal[0];
+                    float slideZ = sz - intoWall * normal[1];
+                    float slideLength = (float) Math.sqrt(slideX * slideX + slideZ * slideZ);
+                    if (slideLength > 1e-5f) {
+                        float scale = Math.min(1f, 0.22f / slideLength);
+                        float tryX = at.x + slideX * scale;
+                        float tryZ = at.z + slideZ * scale;
+                        if (canPlayerOccupy(tryX, tryZ, at.x, at.z)) {
+                            at = new Vec3(tryX, at.y, tryZ);
+                            break;
+                        }
+                    }
+                    // At a building corner both axes may be blocked. Try either
+                    // tangent so the player can round the corner instead of sticking.
+                    float tangentX = -normal[1], tangentZ = normal[0];
+                    if (sx * tangentX + sz * tangentZ < 0f) {
+                        tangentX = -tangentX; tangentZ = -tangentZ;
+                    }
+                    for (int sign = 1; sign >= -1; sign -= 2) {
+                        float tryX = at.x + tangentX * 0.22f * sign;
+                        float tryZ = at.z + tangentZ * 0.22f * sign;
+                        if (canPlayerOccupy(tryX, tryZ, at.x, at.z)) {
+                            at = new Vec3(tryX, at.y, tryZ);
+                            break;
+                        }
+                    }
+                    if (at.x != beforeX || at.z != beforeZ) break;
+                }
+            }
+        }
+        return at;
+    }
+
+    private boolean isBuildingBlocked(float x, float z, float radius) {
+        for (int i = 0; i < buildingColliders.size(); i++) {
+            if (buildingColliders.get(i).blocks(x, z, radius)) return true;
+        }
+        return false;
+    }
+
+    private boolean canPlayerOccupy(float x, float z, float fromX, float fromZ) {
+        float oldGround = heightAt(fromX, fromZ);
+        float newGround = heightAt(x, z);
+        // Reject rock faces and abrupt upward ledges, but allow drops so gravity
+        // can carry the character naturally down cliffs and ravines.
+        if (slopeAt(x, z) > 0.82f || newGround - oldGround > 0.48f) return false;
+        for (int i = 0; i < buildingColliders.size(); i++) {
+            if (buildingColliders.get(i).blocks(x, z, player.radius)) return false;
+        }
+        return true;
+    }
+
     /**
      * Drives the blade.
      *
@@ -725,9 +826,7 @@ public final class World {
             float step = CombatKit.DODGE_DISTANCE / CombatKit.DODGE_TIME * dt;
             Vec3 dir = new Vec3((float) Math.sin(Math.toRadians(combat.dodgeYaw)), 0f,
                     (float) Math.cos(Math.toRadians(combat.dodgeYaw)));
-            Vec3 next = player.position.add(dir.mul(step));
-            float half = terrain.size * 0.5f - 2f;
-            next = next.clampXZ(half);
+            Vec3 next = movePlayerHorizontally(player.position, dir.x * step, dir.z * step);
             next = next.withY(groundHeight(next.x, next.z));
             player.position = next;
         }
@@ -992,7 +1091,7 @@ public final class World {
         SpellCorpus.Def spell = page.def;
         Vec3 from = player.position;
         float distance = Math.min(spell.range, 12f);
-        Vec3 to = player.position.add(facing.mul(distance));
+        Vec3 to = movePlayerHorizontally(player.position, facing.x * distance, facing.z * distance);
         to = to.withY(groundHeight(to.x, to.z));
         player.position = to;
         // The corridor between where the player was and where they now are.
@@ -1502,7 +1601,7 @@ public final class World {
                 // NADI: put the player where she is pointing.
                 Vec3 fwd = new Vec3((float) Math.sin(Math.toRadians(player.yaw)), 0f,
                         (float) Math.cos(Math.toRadians(player.yaw)));
-                Vec3 to = player.position.add(fwd.mul(3f));
+                Vec3 to = movePlayerHorizontally(player.position, fwd.x * 3f, fwd.z * 3f);
                 player.position = to.withY(groundHeight(to.x, to.z));
                 break;
             case 3:

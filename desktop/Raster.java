@@ -495,38 +495,37 @@ public final class Raster {
     private float[] shadeToon(float cr, float cg, float cb,
                               float nx, float ny, float nz,
                               float wx, float wy, float wz) {
-        float ndl = nx * sun[0] + ny * sun[1] + nz * sun[2];
-        float facing = clamp01(ndl * 0.5f + 0.5f);
-        float lit = band(facing, 0.56f);
-        float mid = band(facing, 0.47f) * (1f - lit);
+        float ndl = Math.max(0f, nx * sun[0] + ny * sun[1] + nz * sun[2]);
+        float mid = band(ndl, 0.24f);
+        float lit = band(ndl, 0.58f);
 
-        float skyGrad = clamp01(0.35f + 0.35f * ny);
-        float ambR = ambient[0] * lerp(0.52f, 1f, skyGrad);
-        float ambG = ambient[1] * lerp(0.60f, 1f, skyGrad);
-        float ambB = ambient[2] * lerp(0.92f, 1f, skyGrad);
-
-        float r = cr * ambR * 0.78f;
-        float g = cg * ambG * 0.78f;
-        float b = cb * ambB * 0.78f;
-        r = r + (cr * ambR * 1.10f - r) * mid;
-        g = g + (cg * ambG * 1.10f - g) * mid;
-        b = b + (cb * ambB * 1.10f - b) * mid;
-        float sunLit = 0.62f * lit + 0.22f * mid;
-        r = Math.min(r + cr * sunR * sunLit, 1.06f);
-        g = Math.min(g + cg * sunG * sunLit, 1.06f);
-        b = Math.min(b + cb * sunB * sunLit, 1.06f);
+        float shadowR = cr * 0.34f * (0.88f + 0.12f * clamp01(ambient[0]));
+        float shadowG = cg * 0.40f * (0.88f + 0.12f * clamp01(ambient[1]));
+        float shadowB = cb * 0.61f * (0.88f + 0.12f * clamp01(ambient[2]));
+        float midR = cr * (0.58f + sunR * 0.08f);
+        float midG = cg * (0.64f + sunG * 0.08f);
+        float midB = cb * (0.79f + sunB * 0.08f);
+        float fullR = cr * (0.77f + sunR * 0.10f);
+        float fullG = cg * (0.81f + sunG * 0.10f);
+        float fullB = cb * (0.91f + sunB * 0.10f);
+        float r = lerp(shadowR, midR, mid);
+        float g = lerp(shadowG, midG, mid);
+        float b = lerp(shadowB, midB, mid);
+        r = lerp(r, fullR, lit);
+        g = lerp(g, fullG, lit);
+        b = lerp(b, fullB, lit);
 
         float vx = camPos.x - wx;
         float vy = camPos.y - wy;
         float vz = camPos.z - wz;
         float vl = (float) Math.sqrt(vx * vx + vy * vy + vz * vz) + 1e-6f;
         float ndv = clamp01((nx * vx + ny * vy + nz * vz) / vl);
-        float rim = (float) Math.pow(1f - ndv, 3.0) * 0.34f;
-        float skyFill = clamp01(ny * 0.5f + 0.5f) * 0.42f;
+        float rim = (float) Math.pow(1f - ndv, 3.0) * 0.09f;
+        float skyFill = clamp01(ny) * 0.12f;
 
-        r += cr * rim + cr * 0.16f * skyFill;
-        g += cg * rim + cg * 0.22f * skyFill;
-        b += cb * rim + cb * 0.34f * skyFill;
+        r += cr * rim + cr * 0.08f * skyFill;
+        g += cg * rim + cg * 0.13f * skyFill;
+        b += cb * rim + cb * 0.24f * skyFill;
 
         float dist = vl;
         float fog = 1f - (float) Math.exp(-dist * fogDensity);
@@ -691,7 +690,7 @@ public final class Raster {
      * flat zones with a crisp terminator between them.
      */
     private static float band(float x, float edge) {
-        float t = (x - (edge - 0.015f)) / 0.03f;
+        float t = (x - (edge - 0.025f)) / 0.05f;
         t = clamp01(t);
         return t * t * (3f - 2f * t);
     }

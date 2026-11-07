@@ -3,6 +3,8 @@ import com.laststar.game.core.Mat4;
 import com.laststar.game.art.Skinning;
 import com.laststar.game.art.SkinnedAsset;
 import com.laststar.game.art.SkinnedAssetLoader;
+import com.laststar.game.world.BuildingCollider;
+import com.laststar.game.world.VillageLayout;
 import com.laststar.game.core.DayNightCycle;
 import com.laststar.game.world.Boss;
 import com.laststar.game.world.CombatKit;
@@ -67,6 +69,7 @@ public final class SystemsTest {
         weatherSystem();
         weightedSkinning();
         skinnedAssetImport();
+        buildingCollisions();
 
         System.out.println(checks + " checks, " + failures + " failures");
         if (failures > 0) {
@@ -120,6 +123,26 @@ public final class SystemsTest {
     private static void appendMatrix(StringBuilder out, float tx) {
         out.append("1 0 0 0 0 1 0 0 0 0 1 0 ")
                 .append(tx).append(" 0 0 1 ");
+    }
+
+    private static void buildingCollisions() {
+        World world = new World(94L);
+        check("starter hamlet has eight solid wall runs per house",
+                world.buildingColliders.size() == 32);
+        BuildingCollider wall = new BuildingCollider(0f, 0f, 2f, 0.2f, 0f);
+        check("oriented wall collider blocks character footprint", wall.blocks(0f, 0.45f, 0.4f));
+        check("wall collider allows clearance beyond its footprint", !wall.blocks(0f, 0.75f, 0.4f));
+        long seed = ((long) world.worldSeed << 12) ^ world.regionIndex * 7919L;
+        VillageLayout.House[] houses = VillageLayout.houses(world.terrain, seed);
+        VillageLayout.House house = houses[0];
+        float yaw = (float) Math.toRadians(house.yaw);
+        float x = house.x + (float) Math.sin(yaw) * (VillageLayout.HOUSE_SIZE * 0.5f + 0.7f);
+        float z = house.z + (float) Math.cos(yaw) * (VillageLayout.HOUSE_SIZE * 0.5f + 0.7f);
+        boolean doorwayBlocked = false;
+        for (BuildingCollider collider : world.buildingColliders) {
+            if (collider.blocks(x, z, 0.4f)) doorwayBlocked = true;
+        }
+        check("cottage doorway remains passable", !doorwayBlocked);
     }
 
     private static void weightedSkinning() {

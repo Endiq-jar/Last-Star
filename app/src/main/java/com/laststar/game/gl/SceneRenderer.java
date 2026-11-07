@@ -796,18 +796,18 @@ public final class SceneRenderer {
      * screenshots show what the APK actually renders.</p>
      */
     private void updateSky(World world, Camera camera, float night) {
-        sky.horizonR = Noise.lerp(0.96f, 0.11f, night);
-        sky.horizonG = Noise.lerp(0.86f, 0.12f, night);
-        sky.horizonB = Noise.lerp(0.72f, 0.26f, night);
+        sky.horizonR = Noise.lerp(0.70f, 0.10f, night);
+        sky.horizonG = Noise.lerp(0.83f, 0.14f, night);
+        sky.horizonB = Noise.lerp(0.98f, 0.30f, night);
         sky.zenithR = Noise.lerp(0.20f, 0.03f, night);
         sky.zenithG = Noise.lerp(0.44f, 0.06f, night);
         sky.zenithB = Noise.lerp(0.78f, 0.16f, night);
-        sky.sunR = Noise.lerp(1.00f, 0.44f, night);
-        sky.sunG = Noise.lerp(0.95f, 0.52f, night);
-        sky.sunB = Noise.lerp(0.76f, 0.86f, night);
-        sky.ambientR = Noise.lerp(0.46f, 0.09f, night);
-        sky.ambientG = Noise.lerp(0.52f, 0.12f, night);
-        sky.ambientB = Noise.lerp(0.68f, 0.24f, night);
+        sky.sunR = Noise.lerp(1.00f, 0.46f, night);
+        sky.sunG = Noise.lerp(0.83f, 0.54f, night);
+        sky.sunB = Noise.lerp(0.58f, 0.89f, night);
+        sky.ambientR = Noise.lerp(0.32f, 0.08f, night);
+        sky.ambientG = Noise.lerp(0.40f, 0.11f, night);
+        sky.ambientB = Noise.lerp(0.60f, 0.24f, night);
         sky.fogDensity = Noise.lerp(0.0007f, 0.0016f, night);
         if (world.inHollow) {
             sky.horizonR = 0.075f; sky.horizonG = 0.055f; sky.horizonB = 0.16f;

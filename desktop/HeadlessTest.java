@@ -15,6 +15,8 @@ import com.laststar.game.world.InputState;
 import com.laststar.game.world.Player;
 import com.laststar.game.world.Shard;
 import com.laststar.game.world.World;
+import com.laststar.game.world.BuildingCollider;
+import com.laststar.game.world.VillageLayout;
 
 /**
  * Headless verification of every piece of game logic that does not need OpenGL
@@ -48,6 +50,7 @@ public final class HeadlessTest {
         testDifficulty();
         testWorldSimulation();
         testPlayerMovement();
+        testBuildingCollision();
         testTouchLayout();
         testCombat();
         testShardCollectionAndVictory();
@@ -65,6 +68,13 @@ public final class HeadlessTest {
     }
 
     // ------------------------------------------------------------- helpers
+
+    private static boolean blocksAt(World world, float x, float z) {
+        for (BuildingCollider collider : world.buildingColliders) {
+            if (collider.blocks(x, z, world.player.radius)) return true;
+        }
+        return false;
+    }
 
     private static void check(boolean condition, String what) {
         checks++;
@@ -453,7 +463,10 @@ public final class HeadlessTest {
         float before = c.yaw;
         in.lookX = 4f;
         c.update(1f / 60f, w, in, 0f);
-        check(c.yaw > before, "look input yaws the camera");
+        check(c.yaw < before, "rightward look drag rotates the camera right");
+        float beforeApply = c.yaw;
+        c.applyLook(2f, 0f);
+        check(c.yaw < beforeApply, "direct rightward camera drag uses the same direction");
 
         in.lookX = 0f;
         for (int i = 0; i < 200; i++) {
@@ -895,6 +908,26 @@ public final class HeadlessTest {
      * cannot be reached or two that share a thumb. Distance between centres
      * against the sum of radii is the whole test.</p>
      */
+    private static void testBuildingCollision() {
+        section("terrain and building collision");
+        World world = new World(143L);
+        world.phase = World.Phase.PLAYING;
+        world.phaseTimer = 10f;
+        world.buildingColliders.clear();
+        world.buildingColliders.add(new BuildingCollider(0f, 0f, 2f, 0.2f, 0f));
+        world.player.position = new Vec3(0f, world.heightAt(0f, -2f), -2f);
+        world.player.onGround = true;
+        InputState input = new InputState();
+        input.cameraYaw = 0f;
+        input.moveY = 1f;
+        check(world.buildingColliders.get(0).blocks(0f, -0.5f, world.player.radius),
+                "test wall blocks near edge before movement");
+        for (int i = 0; i < 25; i++) world.update(1f / 60f, input);
+        check(world.player.position.z < -0.5f,
+                "character stops against solid terrain-set building wall (z="
+                        + world.player.position.z + ")");
+    }
+
     private static void testTouchLayout() {
         section("touch layout");
         com.laststar.game.ui.TouchControls c = new com.laststar.game.ui.TouchControls();
@@ -1161,6 +1194,28 @@ public final class HeadlessTest {
 
         System.out.println("    simulated " + (frames / 60) + "s of gameplay in " + frames + " frames");
         System.out.println("    slowest simulated frame: " + String.format(java.util.Locale.US, "%.3f", worstFrameMs) + " ms");
+        if (w.phase != World.Phase.VICTORY) {
+            System.out.println("    phase " + w.phase + " health " + w.player.health
+                    + " onGround " + w.player.onGround);
+            for (Shard shard : w.shards) if (!shard.collected) {
+                System.out.println("    remaining shard " + shard.position + " player " + w.player.position
+                        + " slope " + w.slopeAt(w.player.position.x, w.player.position.z));
+            }
+            for (BuildingCollider collider : w.buildingColliders) {
+                if (collider.blocks(w.player.position.x, w.player.position.z, w.player.radius))
+                    System.out.println("    player intersects wall " + collider.x + "," + collider.z
+                            + " yaw " + collider.yaw);
+            }
+            System.out.println("    nearby blocks east/west/north/south "
+                    + blocksAt(w, w.player.position.x + 0.5f, w.player.position.z) + "/"
+                    + blocksAt(w, w.player.position.x - 0.5f, w.player.position.z) + "/"
+                    + blocksAt(w, w.player.position.x, w.player.position.z + 0.5f) + "/"
+                    + blocksAt(w, w.player.position.x, w.player.position.z - 0.5f));
+            long layoutSeed = ((long) w.worldSeed << 12) ^ w.regionIndex * 7919L;
+            for (VillageLayout.House house : VillageLayout.houses(w.terrain, layoutSeed)) {
+                System.out.println("    house " + house.x + "," + house.z + " yaw " + house.yaw);
+            }
+        }
         check(w.phase == World.Phase.VICTORY, "bot collects all shards and wins");
         check(w.shardsCollected == World.SHARD_COUNT, "all shards gathered");
         check(frames < maxFrames, "run finished inside the time budget");

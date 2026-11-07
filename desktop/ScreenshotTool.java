@@ -198,18 +198,18 @@ public final class ScreenshotTool {
         // Golden-hour anime palette: a warm cream horizon under a saturated
         // cerulean zenith, lit by a pale-gold sun. This is the same palette
         // SceneRenderer.updateSky produces for the APK.
-        float horizonR = Noise.lerp(0.96f, 0.11f, night);
-        float horizonG = Noise.lerp(0.86f, 0.12f, night);
-        float horizonB = Noise.lerp(0.72f, 0.26f, night);
+        float horizonR = Noise.lerp(0.70f, 0.10f, night);
+        float horizonG = Noise.lerp(0.83f, 0.14f, night);
+        float horizonB = Noise.lerp(0.98f, 0.30f, night);
         float zenithR = Noise.lerp(0.20f, 0.03f, night);
         float zenithG = Noise.lerp(0.44f, 0.06f, night);
         float zenithB = Noise.lerp(0.78f, 0.16f, night);
-        float sunR = Noise.lerp(1.00f, 0.44f, night);
-        float sunG = Noise.lerp(0.95f, 0.52f, night);
-        float sunB = Noise.lerp(0.76f, 0.86f, night);
-        float ambR = Noise.lerp(0.46f, 0.09f, night);
-        float ambG = Noise.lerp(0.52f, 0.12f, night);
-        float ambB = Noise.lerp(0.68f, 0.24f, night);
+        float sunR = Noise.lerp(1.00f, 0.46f, night);
+        float sunG = Noise.lerp(0.83f, 0.54f, night);
+        float sunB = Noise.lerp(0.58f, 0.89f, night);
+        float ambR = Noise.lerp(0.32f, 0.08f, night);
+        float ambG = Noise.lerp(0.40f, 0.11f, night);
+        float ambB = Noise.lerp(0.60f, 0.24f, night);
         float fogD = Noise.lerp(0.0007f, 0.0016f, night);
 
         // Stars only appear once the sky has actually darkened.

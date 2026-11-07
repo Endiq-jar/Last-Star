@@ -1,6 +1,7 @@
 package com.laststar.game.gl;
 
 import com.laststar.game.core.Terrain;
+import com.laststar.game.world.VillageLayout;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -682,6 +683,53 @@ public final class PropPlanner {
 
     // -------------------------------------------------------------- landmarks
 
+    private void buildVillage(ModelLibrary models, Terrain terrain, long seed) {
+        VillageLayout.House[] houses = VillageLayout.houses(terrain, seed);
+        float[][] roofTints = {
+                {0.78f, 0.30f, 0.27f}, {0.22f, 0.55f, 0.55f},
+                {0.43f, 0.35f, 0.74f}, {0.79f, 0.59f, 0.27f}
+        };
+        for (int i = 0; i < houses.length; i++) {
+            VillageLayout.House h = houses[i];
+            float yaw = h.yaw;
+            addBuildingPart(models, terrain, h, "path_stoneCircle", 0f, 0f,
+                    5.8f, yaw, -0.01f, 0.77f, 0.73f, 0.64f, 0.18f);
+            addBuildingPart(models, terrain, h, "wall-wood-door", 0f, 2.6f,
+                    4.8f, yaw, 0f, 0f, 0f, 0f, 0f);
+            addBuildingPart(models, terrain, h, "wall-doorway-square", 0f, -2.6f,
+                    4.8f, yaw + 180f, 0f, 0f, 0f, 0f, 0f);
+            addBuildingPart(models, terrain, h, "wall-doorway-square", -2.6f, 0f,
+                    4.8f, yaw - 90f, 0f, 0f, 0f, 0f, 0f);
+            addBuildingPart(models, terrain, h, "wall-doorway-square", 2.6f, 0f,
+                    4.8f, yaw + 90f, 0f, 0f, 0f, 0f, 0f);
+            addBuildingPart(models, terrain, h, "roof-point", 0f, 0f,
+                    5.9f, yaw, 2.25f, roofTints[i][0], roofTints[i][1], roofTints[i][2], 0.24f);
+            // Small roof lantern/finial silhouette gives the cottages a storybook skyline.
+            addBuildingPart(models, terrain, h, "flag-banner-long", 0f, 0f,
+                    1.3f, yaw, 4.2f, 0.70f, 0.77f, 0.94f, 0.38f);
+            addBuildingPart(models, terrain, h, "barrel", 3.6f, 2.6f,
+                    0.9f, yaw, 0f, 0f, 0f, 0f, 0f);
+        }
+    }
+
+    private void addBuildingPart(ModelLibrary models, Terrain terrain,
+                                 VillageLayout.House house, String name,
+                                 float localX, float localZ, float metres, float yaw,
+                                 float yOffset, float tr, float tg, float tb, float tint) {
+        float a = (float) Math.toRadians(house.yaw);
+        float x = house.x + (float) Math.cos(a) * localX + (float) Math.sin(a) * localZ;
+        float z = house.z - (float) Math.sin(a) * localX + (float) Math.cos(a) * localZ;
+        float y = terrain.heightAt(x, z) + yOffset;
+        for (int i = 0; i < models.size(); i++) {
+            ModelLibrary.Model model = models.get(i);
+            if (model.name.equals(name)) {
+                landmarks.add(new Instance(i, x, y, z, yaw, model.scaleTo(metres),
+                        tr, tg, tb, tint));
+                return;
+            }
+        }
+    }
+
     private void buildLandmarks(ModelLibrary models, Terrain terrain, long seed) {
         // Flattest patches, so walls and towers do not float or sink.
         float[] gate = flattestSpot(terrain, 40f, 8f, seed);
@@ -692,12 +740,9 @@ public final class PropPlanner {
         if (yard != null) {
             courtyard(models, terrain, yard[0], yard[1]);
         }
-        // The camp sits near the spawn, wherever the ground is flattest in that
-        // ring, so it is the first thing the player sees.
-        float[] camp = flattestSpot(terrain, 15f, 4f, seed + 613);
-        if (camp != null && !tooCloseToLandmarks(camp[0], camp[1], 12f)) {
-            camp(models, terrain, camp[0], camp[1]);
-        }
+        // A compact timber hamlet around a clear spawn plaza. Layout data is
+        // shared with World so every visible wall has a matching collider.
+        buildVillage(models, terrain, seed);
         float[] peak = highestSpot(terrain, 30f, 80f, seed + 977);
         if (peak != null && !tooCloseToLandmarks(peak[0], peak[1], 20f)) {
             watchtower(models, terrain, peak[0], peak[1]);

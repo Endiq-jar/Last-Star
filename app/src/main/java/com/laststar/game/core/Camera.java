@@ -35,7 +35,7 @@ public final class Camera {
     public void update(float dt, World world, InputState cameraInput, float shakeAmount) {
         time += dt;
         if (cameraInput != null) {
-            yaw += cameraInput.lookX;
+            yaw -= cameraInput.lookX;
             pitch += cameraInput.lookY;
             pitch = Noise.clamp(pitch, MIN_PITCH, MAX_PITCH);
         }
@@ -97,7 +97,9 @@ public final class Camera {
 
     /** Applies a look input, clamped so the camera never flips. */
     public void applyLook(float dx, float dy) {
-        yaw += dx;
+        // A rightward drag turns the view to the right. The orbit yaw describes
+        // the camera-to-target vector, so its numeric angle moves the opposite way.
+        yaw -= dx;
         pitch = Noise.clamp(pitch + dy, MIN_PITCH, MAX_PITCH);
     }
 
