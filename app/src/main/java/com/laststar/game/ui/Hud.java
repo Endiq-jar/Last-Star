@@ -34,6 +34,7 @@ public final class Hud {
     }
 
     public void draw(UiBatch b, World world, TouchControls controls, boolean showDebug) {
+        drawBossBar(b, world);
         float w = b.virtualWidth;
         float h = b.virtualHeight;
 
@@ -84,6 +85,61 @@ public final class Hud {
                 break;
             default:
                 break;
+        }
+    }
+
+    /**
+     * The boss bar, across the top.
+     *
+     * <p>Three things have to be legible at a glance mid-fight: how much health
+     * is left, which phase the fight is in, and whether the weak point is open
+     * right now. So the bar carries the phase name above it and a ring at the
+     * end that lights when the weak point is exposed.</p>
+     */
+    private void drawBossBar(UiBatch b, World world) {
+        com.laststar.game.world.Boss boss = world.boss;
+        if (boss == null || !boss.alive) {
+            return;
+        }
+        float w = b.virtualWidth;
+        float barW = w * 0.56f;
+        float barX = (w - barW) * 0.5f;
+        float barY = 54f;
+
+        b.textSpacedCentred(boss.name, w * 0.5f, barY - 15f, 1, 3.2f,
+                Style.IVORY[0], Style.IVORY[1], Style.IVORY[2], 0.95f, font);
+        String phaseName = boss.phase.name() + "  --  " + boss.ruleFor(boss.phase);
+        b.textSpacedCentred(phaseName, w * 0.5f, barY - 5f, 1, 1.1f,
+                Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1], Style.GOLD_LIGHT[2],
+                0.85f, font);
+
+        // Track and fill, with phase notches so the player can see the turns.
+        b.quad(barX - 2f, barY, barW + 4f, 12f, 0.04f, 0.05f, 0.07f, 0.85f);
+        float frac = boss.fraction();
+        b.quad(barX, barY + 2f, barW * frac, 8f, 0.88f, 0.24f, 0.28f, 0.95f);
+        b.quad(barX, barY + 2f, barW * frac, 3f, 1f, 0.52f, 0.46f, 0.55f);
+        float[] notches = {0.70f, 0.42f, 0.18f};
+        for (int i = 0; i < notches.length; i++) {
+            b.quad(barX + barW * notches[i], barY, 1.5f, 12f,
+                    1f, 0.92f, 0.70f, 0.55f);
+        }
+        // A guarded boss has a shell over the bar, so a player who is only
+        // chipping it can see why.
+        if (boss.guarded) {
+            b.quad(barX, barY + 2f, barW * frac, 8f, 0.55f, 0.62f, 0.78f, 0.30f);
+        }
+
+        // The weak point ring, lit while it is open.
+        float r = boss.weakPointExposed() ? 12f : 9f;
+        float a = boss.weakPointExposed()
+                ? 0.65f + 0.30f * (float) Math.sin(world.worldTime * 16f) : 0.30f;
+        b.ring(barX + barW + 16f, barY + 6f, r, r * 0.7f, 18,
+                1f, 0.88f, 0.45f, a);
+
+        // A telegraph while it winds up: the only warning the player gets.
+        if (boss.windup > 0f) {
+            float t = boss.windupFraction();
+            b.quad(barX, barY + 16f, barW * t, 3f, 1f, 0.72f, 0.28f, 0.9f);
         }
     }
 

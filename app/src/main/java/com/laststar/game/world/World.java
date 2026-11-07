@@ -74,6 +74,10 @@ public final class World {
     public final SpellBook spells = new SpellBook();
     /** The blade: timing, combos, parry, dodge, finishers. */
     public final CombatKit combat = new CombatKit();
+    /** The region's boss, once it has been woken. */
+    public Boss boss;
+    /** Where the boss stands, or null before it wakes. */
+    public Vec3 bossSpawn;
     /** The journal, and the thing that advances it. */
     public final QuestLog quests = new QuestLog();
     /** Which of the fourteen settlements the player is standing in. */
@@ -316,6 +320,14 @@ public final class World {
             pickups.add(new Pickup(new Vec3(x, terrain.heightAt(x, z) + 0.85f, z), Pickup.Type.HEALTH));
         }
 
+        // The region's boss waits at the far side of the map, past the shards.
+        // It is not on the way to anything, so meeting it is a choice.
+        float bossAngle = (float) (regionIndex * 2.39996 + 1.1);
+        float bossX = (float) Math.cos(bossAngle) * 74f;
+        float bossZ = (float) Math.sin(bossAngle) * 74f;
+        bossSpawn = new Vec3(bossX, terrain.heightAt(bossX, bossZ) + 0.05f, bossZ);
+        boss = null;
+
         // Scatter the region's lost pages. A page lying in the world is how the
         // document says new magic should be found -- by exploring, not by
         // shopping -- so each region hides the spells that belong to it.
@@ -494,6 +506,7 @@ public final class World {
         handleCasting(dt, input);
         handleCombat(dt, input);
         updateEnemies(dt);
+        updateBoss(dt);
         updateShards(dt);
         updatePickups(dt);
         updateEnvironment(dt, input);
@@ -1184,6 +1197,17 @@ public final class World {
             hits++;
             combat.onHitLanded(base, wasAlive && !e.alive);
         }
+        // The boss is not in the enemy list -- it has its own movement and its
+        // own phases -- so a swing in its direction has to reach it here.
+        if (boss != null && boss.alive && bossSpawn != null) {
+            Vec3 toBoss = bossSpawn.sub(player.position);
+            if (toBoss.horizontalLength() <= reach + 1.6f
+                    && toBoss.normalizedXZ().dot(facing) > 0.35f) {
+                if (strikeBoss() > 0f) {
+                    hits++;
+                }
+            }
+        }
         return hits;
     }
 
@@ -1221,6 +1245,149 @@ public final class World {
             shakeAmount = Math.min(1f, shakeAmount + 0.42f);
         }
         return hits;
+    }
+
+    /**
+     * Wakes and drives the region's boss.
+     *
+     * <p>Sleeping until the player comes close means the fight cannot be
+     * triggered by accident and the boss is not burning frames across the map.</p>
+     */
+    private void updateBoss(float dt) {
+        if (bossSpawn == null) {
+            return;
+        }
+        if (boss == null) {
+            Vec3 to = bossSpawn.sub(player.position);
+            if (to.horizontalLength() < 26f) {
+                boss = new Boss(region.boss, regionIndex, Math.max(1, level()));
+                showMessage(region.boss + " WAKES", 3.0f, 0.85f);
+                shakeAmount = Math.min(1f, shakeAmount + 0.6f);
+            }
+            return;
+        }
+        if (!boss.alive) {
+            return;
+        }
+        float distance = bossSpawn.sub(player.position).horizontalLength();
+        boss.update(dt, distance);
+        if (boss.resolvePending) {
+            resolveBossAttack();
+        }
+        // A weak point opens after a stagger, which gives the player a window
+        // in which the fight is winnable rather than merely survivable.
+        if (boss.staggerTimer <= 0f && boss.weakPointOpen <= 0f
+                && boss.phase == Boss.Phase.THIRD) {
+            boss.exposeWeakPoint();
+        }
+    }
+
+    /** Applies whatever the boss just did. */
+    private void resolveBossAttack() {
+        if (boss == null) {
+            return;
+        }
+        Vec3 centre = bossSpawn.add(new Vec3(0f, 1.1f, 0f));
+        float distance = bossSpawn.sub(player.position).horizontalLength();
+        switch (boss.currentAttack) {
+            case SWEEP:
+                if (distance < 4.5f) {
+                    hurtPlayer(22f + boss.level * 1.4f);
+                }
+                break;
+            case LUNGE:
+                if (distance < 7f) {
+                    hurtPlayer(26f + boss.level * 1.6f);
+                }
+                // A lunge that misses leaves the boss open behind.
+                boss.exposeWeakPoint();
+                break;
+            case SLAM:
+                if (distance < 6.5f) {
+                    hurtPlayer(30f + boss.level * 1.8f);
+                }
+                shakeAmount = Math.min(1f, shakeAmount + 0.5f);
+                break;
+            case VOLLEY:
+                if (distance < 24f) {
+                    hurtPlayer(14f + boss.level * 0.9f);
+                }
+                break;
+            case CALL:
+                // Two creatures join, which is what makes the last phase busy.
+                for (int i = 0; i < 2; i++) {
+                    Vec3 at = bossSpawn.add(new Vec3(2.5f * (i == 0 ? -1f : 1f), 0f, 2.5f));
+                    Enemy minion = new Enemy(at.withY(terrain.heightAt(at.x, at.z)), 40f);
+                    if (region.creatures.length > 0) {
+                        minion.name = region.creatures[i % region.creatures.length];
+                    }
+                    enemies.add(minion);
+                }
+                break;
+            case ARENA:
+                // The ground itself attacks: anything standing still is hurt,
+                // which is the arena mechanic the third phase promised.
+                if (player.velocity.horizontalLength() < 2.0f) {
+                    hurtPlayer(18f + boss.level * 1.1f);
+                }
+                shakeAmount = Math.min(1f, shakeAmount + 0.35f);
+                break;
+            default:
+                break;
+        }
+    }
+
+    /**
+     * Damages the boss with the swing whose hit window is open.
+     *
+     * @return damage dealt
+     */
+    public float strikeBoss() {
+        if (boss == null || !boss.alive) {
+            return 0f;
+        }
+        Vec3 centre = bossSpawn.add(new Vec3(0f, 1.1f, 0f));
+        Vec3 hitPoint = player.centre().add(new Vec3(
+                (float) Math.sin(Math.toRadians(player.yaw)) * 1.6f, 0f,
+                (float) Math.cos(Math.toRadians(player.yaw)) * 1.6f));
+        boolean weak = boss.hitsWeakPoint(centre, hitPoint, 1.5f);
+        float dealt = boss.damage(Player.MELEE_DAMAGE * combat.damageScale(),
+                weak, combat.breaksGuard());
+        if (dealt > 0f) {
+            shakeAmount = Math.min(1f, shakeAmount + (weak ? 0.55f : 0.22f));
+            hitStop = weak ? 0.09f : 0.05f;
+            combat.onHitLanded(dealt, !boss.alive);
+        }
+        if (!boss.alive) {
+            onBossDefeated();
+        }
+        return dealt;
+    }
+
+    /** Everything a boss kill is worth. */
+    private void onBossDefeated() {
+        showMessage(boss.name + " FALLS", 3.2f, 0.9f);
+        addGold(180 + level() * 30);
+        quests.report(QuestCorpus.Kind.BOSS, boss.name, 1);
+        payOut(quests.justCompleted);
+        spells.raiseCapacity(8f);
+    }
+
+    /** Damages the player through the usual guards. */
+    private void hurtPlayer(float amount) {
+        boolean perfectDodging = combat.perfectDodgeActive();
+        if (combat.onIncomingBlow()) {
+            return;
+        }
+        if (perfectDodging || combat.dodgeInvulnerable()) {
+            return;
+        }
+        player.damage(amount);
+        combat.onPlayerHurt();
+        shakeAmount = Math.min(1f, shakeAmount + 0.55f);
+        if (!player.alive) {
+            onPlayerDeath();
+        }
     }
 
     private void updateEnemies(float dt) {

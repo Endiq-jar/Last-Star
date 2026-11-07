@@ -1,4 +1,5 @@
 import com.laststar.game.core.Vec3;
+import com.laststar.game.world.Boss;
 import com.laststar.game.world.CombatKit;
 import com.laststar.game.world.Enemy;
 import com.laststar.game.world.QuestLog;
@@ -41,6 +42,7 @@ public final class SystemsTest {
         saveRoundTrip();
         regionTravel();
         combatKit();
+        bosses();
 
         System.out.println(checks + " checks, " + failures + " failures");
         if (failures > 0) {
@@ -395,6 +397,130 @@ public final class SystemsTest {
             }
         }
         return true;
+    }
+
+    // -- the bosses -----------------------------------------------------------
+
+    private static void bosses() {
+        System.out.println("Boss");
+        Boss boss = new Boss("THE LAKE WARDEN", 2, 8);
+        check("a boss starts alive", boss.alive);
+        check("a boss starts in its first phase", boss.phase == Boss.Phase.FIRST);
+        check("a boss has a big health pool", boss.maxHealth > 600f);
+        check("the first phase has a small pattern", boss.patternCount() == 2);
+
+        // Phases must follow health, and each must add something.
+        check("phase one below seventy percent", Boss.phaseFor(0.69f) == Boss.Phase.SECOND);
+        check("phase two below forty-two", Boss.phaseFor(0.41f) == Boss.Phase.THIRD);
+        check("phase three below eighteen", Boss.phaseFor(0.17f) == Boss.Phase.FINAL);
+        check("there are at most four phases", Boss.Phase.values().length == 4);
+
+        // Each phase must introduce a mechanic, not only more health.
+        check("the first phase is unguarded", !boss.guarded);
+        boss.health = boss.maxHealth * 0.60f;
+        boss.update(0.016f, 5f);
+        check("the second phase raises a guard", boss.guarded);
+        check("the second phase adds a pattern", boss.patternCount() == 3);
+
+        boss.health = boss.maxHealth * 0.35f;
+        boss.update(0.016f, 5f);
+        check("the third phase reaches the arena",
+                boss.patternCount() == 4);
+        boolean arena = false;
+        Boss.Attack[] third = boss.patterns();
+        for (int i = 0; i < third.length; i++) {
+            arena |= third[i] == Boss.Attack.ARENA;
+        }
+        check("the arena attacks in the third phase", arena);
+
+        boss.health = boss.maxHealth * 0.10f;
+        boss.update(0.016f, 5f);
+        check("the final phase drops the guard", !boss.guarded);
+        check("the final phase exposes the weak point", boss.weakPointExposed());
+        check("the final phase has every pattern", boss.patternCount() == 5);
+
+        // Every phase has a rule, which is what the banner reads.
+        for (int i = 0; i < Boss.Phase.values().length; i++) {
+            String rule = Boss.ruleFor(Boss.Phase.values()[i]);
+            check("phase " + i + " states a rule",
+                    rule != null && rule.length() > 5);
+        }
+
+        // The guard: a light blow barely scratches it, a heavy one lands.
+        Boss guarded = new Boss("WARDEN", 0, 5);
+        guarded.health = guarded.maxHealth * 0.60f;
+        guarded.update(0.016f, 5f);
+        check("the guard is up", guarded.guarded);
+        float hp = guarded.health;
+        float light = guarded.damage(40f, false, false);
+        check("a light blow is shrugged off", light < 10f);
+        float heavy = guarded.damage(40f, false, true);
+        check("a heavy blow gets through", heavy > 35f);
+        check("damage is applied", guarded.health < hp);
+
+        // The weak point: worth several times a normal blow, and it staggers.
+        Boss weak = new Boss("WARDEN", 0, 5);
+        weak.exposeWeakPoint();
+        check("a weak point can be exposed", weak.weakPointExposed());
+        float normalHit = weak.damage(40f, false, true);
+        weak.exposeWeakPoint();
+        float weakHit = weak.damage(40f, true, true);
+        check("a weak point is worth several blows", weakHit > normalHit * 2.5f);
+
+        Vec3 centre = new Vec3(0f, 0f, 0f);
+        Vec3 onPoint = weak.weakPointPosition(centre);
+        check("a blow on the point counts",
+                weak.hitsWeakPoint(centre, onPoint, 1.5f));
+        check("a blow across the field does not",
+                !weak.hitsWeakPoint(centre, new Vec3(9f, 0f, 9f), 1.5f));
+
+        // Three weak-point strikes stagger, which is the window to punish.
+        Boss stagger = new Boss("WARDEN", 0, 5);
+        for (int i = 0; i < 3; i++) {
+            stagger.exposeWeakPoint();
+            stagger.damage(10f, true, true);
+        }
+        check("three weak-point hits stagger", stagger.staggerTimer > 0f);
+
+        // A boss outside range does nothing rather than flailing from afar.
+        Boss distant = new Boss("WARDEN", 0, 5);
+        for (int i = 0; i < 20; i++) {
+            distant.update(0.016f, 90f);
+        }
+        check("a distant boss does not swing", distant.windup <= 0f);
+
+        // In range it winds up, then resolves, then cools down.
+        Boss near = new Boss("WARDEN", 0, 5);
+        boolean sawWindup = false;
+        boolean sawResolve = false;
+        for (int i = 0; i < 200 && !sawResolve; i++) {
+            near.update(0.016f, 5f);
+            if (near.windup > 0f) {
+                sawWindup = true;
+            }
+            if (near.resolvePending) {
+                sawResolve = true;
+            }
+        }
+        check("a boss in range winds up", sawWindup);
+        check("the wind-up resolves into an attack", sawResolve);
+
+        // A boss that dies stays dead.
+        Boss dead = new Boss("WARDEN", 0, 3);
+        dead.damage(dead.maxHealth * 2f, false, true);
+        check("enough damage kills", !dead.alive);
+        check("a dead boss reports no health", dead.fraction() == 0f);
+        check("a dead boss takes no more", dead.damage(50f, false, true) == 0f);
+
+        // Every region names a boss, so every region has one to fight.
+        boolean allNamed = true;
+        for (int i = 0; i < Elaris.REGION_COUNT; i++) {
+            String name = Elaris.regions()[i].boss;
+            if (name == null || name.length() < 3) {
+                allNamed = false;
+            }
+        }
+        check("all fourteen regions have a boss", allNamed);
     }
 
     // -- the blade ------------------------------------------------------------
