@@ -168,8 +168,8 @@ public final class PropPlanner {
         // Grass and flowers go on last of all. They have the smallest gap
         // between them, so they are the layer that fills whatever space is
         // left rather than the layer everything else has to work around.
-        scatter(models, terrain, seed + 37, ModelLibrary.GRASS, 9000, 0.55f, 3f, true);
-        scatter(models, terrain, seed + 41, ModelLibrary.FLOWER, 4200, 0.9f, 4f, true);
+        scatter(models, terrain, seed + 37, ModelLibrary.GRASS, 3500, 0.70f, 3f, true);
+        scatter(models, terrain, seed + 41, ModelLibrary.FLOWER, 1100, 1.10f, 4f, true);
     }
 
 
@@ -408,8 +408,12 @@ public final class PropPlanner {
         scatterPack(models, terrain, seed + 5531, "pk_pebbles", 3200, 0.80f, 2.2f);
         // pk_spell-book is deliberately absent: the Wander is a single lore
         // object placed by World, not a shrub to be scattered 88 times.
-        // Grass last and densest: it should thread between everything else.
-        scatterPack(models, terrain, seed + 5501, "pk_grass", 30000, 0.50f, 2.4f);
+        // Grass last and by far the densest. The imported clump is a wide, low
+        // ground patch: used sparsely each one reads as a green plate lying on
+        // the ground. What makes it grass is overlap -- small patches packed
+        // until they merge into a carpet, with the terrain's own meadow colour
+        // showing through the gaps.
+        scatterPack(models, terrain, seed + 5501, "pk_grass", 90000, 0.34f, 2.4f);
     }
 
     /** One named pack model scattered over dry open ground. */

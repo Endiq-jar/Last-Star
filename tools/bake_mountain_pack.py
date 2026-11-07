@@ -43,10 +43,15 @@ ASSETS = [
     ('Bush01.fbx',     'bush',       PLANT,    1.7, (0.30, 0.54, 0.28), 'height'),
     ('Rock01.fbx',     'rock',       ROCK,     1.9, (0.56, 0.57, 0.62), 'height'),
     ('Rock02.fbx',     'rock2',      ROCK,     2.6, (0.60, 0.59, 0.63), 'height'),
-    ('Pebbles01.fbx',  'pebbles',    ROCK,     0.45, (0.64, 0.63, 0.66), 'width'),
-    ('Grass01.fbx',    'grass',      GRASS,    0.80, (0.40, 0.68, 0.33), 'width'),
-    ('Flower01.fbx',   'flower',     FLOWER,   0.42, (0.88, 0.46, 0.74), 'height'),
-    ('Flowers01.fbx',  'flowers',    FLOWER,   0.60, (0.95, 0.74, 0.36), 'width'),
+    # Ground cover is sized by height, not width. Every one of these is
+    # authored as a broad, low mound of clumps -- Grass01 is 115 wide against
+    # 45 tall -- so scaling by width produces a wide flat plate lying on the
+    # ground, which is exactly how it looked. These are the heights each thing
+    # should stand at in metres.
+    ('Pebbles01.fbx',  'pebbles',    ROCK,     0.14, (0.64, 0.63, 0.66), 'height'),
+    ('Grass01.fbx',    'grass',      GRASS,    0.72, (0.42, 0.70, 0.34), 'height'),
+    ('Flower01.fbx',   'flower',     FLOWER,   0.52, (0.88, 0.46, 0.74), 'height'),
+    ('Flowers01.fbx',  'flowers',    FLOWER,   0.44, (0.95, 0.74, 0.36), 'height'),
     ('Bridge01.fbx',   'bridge',     PATH,    14.0, (0.62, 0.48, 0.32), 'span'),
     ('spell-book.fbx', 'spell-book', WANDER,   0.42, (0.42, 0.34, 0.74), 'span'),
 ]
@@ -243,9 +248,17 @@ def main():
 
     existing = []
     if base and os.path.exists(base):
-        existing = read_set(base)
-        print('merging into %d built-in models from %s'
-              % (len(existing), base))
+        loaded = read_set(base)
+        # Re-running the bake must be safe. The baked set is committed and the
+        # built-in models cannot be regenerated (their glTF sources are not in
+        # the repository), so the base is whatever is committed -- which may
+        # already contain the pack. Dropping those entries first makes this
+        # idempotent instead of failing on a name collision.
+        existing = [m for m in loaded if not m[0].startswith('pk_')]
+        dropped = len(loaded) - len(existing)
+        print('merging into %d built-in models from %s%s'
+              % (len(existing), base,
+                 '' if dropped == 0 else ' (replacing %d pack models)' % dropped))
 
     prepared = []
     for fn, name, role, target, colour, mode in ASSETS:
