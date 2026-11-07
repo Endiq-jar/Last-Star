@@ -16,6 +16,10 @@ public interface Screen {
         BACK
     }
 
+    /** Gives the page the live game state, for pages that show real data. */
+    default void bind(com.laststar.game.world.World world) {
+    }
+
     void update(float dt);
 
     /** Draws the page content (everything except backdrop, title and tab bar). */

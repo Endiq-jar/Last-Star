@@ -41,6 +41,8 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
     private final SceneRenderer renderer = new SceneRenderer();
     private final Hud hud;
     private final Prefs prefs;
+    /** Where the run is kept between sessions. */
+    private final com.laststar.game.world.SaveFile save;
     private final Menu menu = new Menu();
     /** True while the out-of-game menus are showing. */
     private boolean inMenu = true;
@@ -90,11 +92,18 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
         });
 
         prefs = new Prefs(context);
+        save = new com.laststar.game.world.SaveFile(context);
         world = new World(20261105L);
+        // Put the player back where they left off. A rejected or missing save
+        // simply means a fresh run, which is the right answer in both cases.
+        if (save.load(world)) {
+            world.restoreProgressNote();
+        }
         hud = new Hud(new com.laststar.game.ui.Font());
         hud.soundOn = !prefs.isMuted();
         controls.setLeftHanded(prefs.isLeftHanded());
         menu.load(prefs);
+        menu.bind(world);
         wireEvents();
     }
 
@@ -107,6 +116,9 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
             @Override
             public void onShard(int collected, int total) {
                 sound.play(SoundFx.Id.SHARD);
+                // A shard is the longest stretch between safe points, so it is
+                // also the natural place to bank.
+                save.save(world);
             }
 
             @Override
@@ -117,6 +129,7 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
             @Override
             public void onVictory() {
                 sound.play(SoundFx.Id.VICTORY);
+                save.save(world);
             }
         };
     }
@@ -435,6 +448,8 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
         sound.setEnabled(false);
         // Bank the run so progress survives a kill or an app switch.
         prefs.recordRun(world.shardsCollected, world.kills, world.phase == World.Phase.COMPLETE);
+        // Banking on pause is what makes "I closed the app" cost nothing.
+        save.save(world);
     }
 
     public boolean toggleDebug() {

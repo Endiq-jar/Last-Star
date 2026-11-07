@@ -5,6 +5,9 @@ import com.laststar.game.ui.GenshinKit;
 import com.laststar.game.ui.Style;
 import com.laststar.game.ui.TabBar;
 import com.laststar.game.ui.UiBatch;
+import com.laststar.game.world.QuestLog;
+import com.laststar.game.world.World;
+import com.laststar.game.world.lore.Elaris;
 
 /**
  * Quest journal: parchment tabs (Completed / Side / Main / Serve Quests), a
@@ -13,60 +16,104 @@ import com.laststar.game.ui.UiBatch;
  */
 public final class QuestsScreen implements Screen {
 
-    private static final String[] TABS = {"COMPLETED", "SIDE", "MAIN", "SERVE QUESTS"};
+    /** The journal's four views. */
+    private static final String[] TABS = {"ACTIVE", "MAIN", "SIDE", "DONE"};
 
-    private static final String[][] NAMES = {
-            {"THE FIRST LIGHT", "ASHEN TIDE", "WARDEN'S FALL", "THE LONG NIGHT", "STARFALL"},
-            {"A LOST STAR", "NIGHTFALL", "THE SIX SHARDS", "LANTERN KEEPER", "DUSK RUNNER"},
-            {"THE SIX SHARDS", "WARDEN OF THE LAKE", "RESTORE THE SKY", "THE LAST EMBER",
-                    "DAWN RETURN"},
-            {"SERVE: THE SHRINE", "SERVE: THE WATCH", "SERVE: THE FEAST", "SERVE: THE VIGIL",
-                    "SERVE: THE DAWN"}
-    };
+    /** How many rows the list shows at once. */
+    private static final int ROWS = 5;
 
-    private static final String[][] DESCRIPTIONS = {
-            {"THE SKY WAS WHOLE AGAIN, FOR A NIGHT.",
-                    "THE TIDE CARRIED THE WARDENS OUT TO SEA.",
-                    "A WARDEN FELL AT THE LAKESIDE, AND THE DARK RECEDED.",
-                    "YOU HELD THE LIGHT UNTIL MORNING.",
-                    "SIX SHARDS RETURNED - THE CITADEL REMEMBERED."},
-            {"A SHARD FELL BEYOND THE RIDGE - BRING IT HOME BEFORE DUSK.",
-                    "THE NIGHT IS COMING EARLY - GATHER WHAT LIGHT REMAINS.",
-                    "SIX SHARDS, SIX WARDENS - RESTORE WHAT WAS BROKEN.",
-                    "AN OLD KEEPER WAITS BY THE WATER WITH A DIM LANTERN.",
-                    "RUN THE DUSK ROAD AND DO NOT LOOK BACK."},
-            {"SIX STAR SHARDS FELL ACROSS THE ISLAND. RECOVER THEM ALL " +
-                            "BEFORE THE WARDENS OVERWHELM YOU.",
-                    "THE LAKE WARDEN CIRCLES THE WATER - STRIKE WHEN IT WINDS UP.",
-                    "RETURN THE LAST SHARD TO THE CITADEL AND HOLD THE LIGHT.",
-                    "ONE EMBER REMAINS IN THE HALL - DO NOT LET IT FAIL.",
-                    "DAWN RETURNS ONLY WHEN THE SIX ARE GATHERED."},
-            {"LIGHT THE SHRINE LANTERNS BEFORE THE BELL.",
-                    "STAND A WATCH ON THE EASTERN WALL UNTIL DAWN.",
-                    "BRING THREE SHARDS TO THE FEAST TABLE.",
-                    "KEEP THE VIGIL - THE WARDENS TEST THE GATE AT MIDNIGHT.",
-                    "GREET THE DAWN WITH A FULL LANTERN AND AN EMPTY BLADE."}
-    };
-
-    private static final String[][] REWARDS = {
-            {"500 GOLD", "320 GOLD", "640 GOLD", "900 GOLD", "1250 GOLD"},
-            {"250 GOLD", "300 GOLD", "500 GOLD", "180 GOLD", "220 GOLD"},
-            {"1500 GOLD", "700 GOLD", "900 GOLD", "1100 GOLD", "1400 GOLD"},
-            {"60 GOLD", "80 GOLD", "120 GOLD", "140 GOLD", "200 GOLD"}
-    };
-
-    private static final String[] STATUS = {"COMPLETE", "ACTIVE", "ACTIVE", "ACTIVE", "LOCKED"};
-
-    public int activeTab = 2;
+    public int activeTab = 1;
     public int selectedQuest;
+    /** First row shown, for scrolling past five quests. */
+    public int scroll;
     private final float[] tabPress = new float[TABS.length];
-    private final float[] rowPress = new float[5];
+    private final float[] rowPress = new float[ROWS];
     private float trackPress;
     private float time;
+    /** The live journal, or null before the game has started. */
+    private World world;
+    private int cachedTab = -1;
+    private int cachedVersion = -1;
+    private final java.util.List<QuestLog.Entry> rows =
+            new java.util.ArrayList<QuestLog.Entry>();
+
+    @Override
+    public void bind(World world) {
+        if (this.world != world) {
+            this.world = world;
+            cachedTab = -1;
+        }
+    }
+
+    /**
+     * Rebuilds the visible rows when the tab or the journal has changed.
+     *
+     * <p>Doing this every frame would allocate a list per frame for nothing: the
+     * journal only changes when a quest does, and the open/finished counts are
+     * a cheap proxy for that.</p>
+     */
+    private void syncRows() {
+        int version = world == null ? 0
+                : world.quests.completedCount() * 31 + world.quests.openCount();
+        if (activeTab == cachedTab && version == cachedVersion) {
+            return;
+        }
+        cachedTab = activeTab;
+        cachedVersion = version;
+        rows.clear();
+        if (world == null) {
+            return;
+        }
+        QuestLog log = world.quests;
+        for (int i = 0; i < log.entries.length; i++) {
+            QuestLog.Entry e = log.entries[i];
+            if (!matchesTab(e)) {
+                continue;
+            }
+            // The list is the settlement the player is standing in, so a
+            // journal reads as a place rather than as the whole world at once.
+            if (e.def.region != world.regionIndex && e.state != QuestLog.DONE) {
+                continue;
+            }
+            rows.add(e);
+        }
+        selectedQuest = Math.max(0, Math.min(selectedQuest, rows.size() - 1));
+        if (scroll > selectedQuest) {
+            scroll = selectedQuest;
+        }
+        if (selectedQuest >= scroll + ROWS) {
+            scroll = selectedQuest - ROWS + 1;
+        }
+        scroll = Math.max(0, Math.min(scroll, Math.max(0, rows.size() - ROWS)));
+    }
+
+    private boolean matchesTab(QuestLog.Entry e) {
+        switch (activeTab) {
+            case 0:
+                return e.state == QuestLog.OPEN;
+            case 1:
+                return e.state == QuestLog.OPEN && e.def.main;
+            case 2:
+                return e.state == QuestLog.OPEN && !e.def.main;
+            case 3:
+                return e.state == QuestLog.DONE;
+            default:
+                return false;
+        }
+    }
+
+    /** The row the card is describing, or null. */
+    private QuestLog.Entry selected() {
+        if (selectedQuest < 0 || selectedQuest >= rows.size()) {
+            return null;
+        }
+        return rows.get(selectedQuest);
+    }
 
     @Override
     public void update(float dt) {
         time += dt;
+        syncRows();
         for (int i = 0; i < tabPress.length; i++) {
             if (tabPress[i] > 0f) {
                 tabPress[i] = Math.max(0f, tabPress[i] - dt * 3.5f);
@@ -165,10 +212,11 @@ public final class QuestsScreen implements Screen {
         float rx = listX();
         float ry = listY(h);
         float rh = rowH();
-        for (int i = 0; i < 5; i++) {
-            float y = ry + i * (rh + 5f);
+        for (int r = 0; r < ROWS; r++) {
+            int i = scroll + r;
+            float y = ry + r * (rh + 5f);
             boolean selected = i == selectedQuest;
-            float p = rowPress[i];
+            float p = rowPress[r];
             float lw = w * 0.255f;
             if (selected) {
                 b.quadGradient(rx, y, lw, rh,
@@ -186,12 +234,15 @@ public final class QuestsScreen implements Screen {
 
             GenshinKit.diamond(b, rx + 12f, y + 12f, 3.4f,
                     Style.GOLD_LIGHT[0], Style.GOLD_LIGHT[1], Style.GOLD_LIGHT[2], alpha);
-            String title = fit(NAMES[activeTab][i], font, w * 0.255f - 30f, 1, 0.6f);
+            QuestLog.Entry entry = i < rows.size() ? rows.get(i) : null;
+            String title = entry == null ? "--"
+                    : fit(entry.def.title, font, w * 0.255f - 30f, 1, 0.6f);
             b.textSpaced(title, rx + 22f, y + 6f, 1, 0.6f,
                     selected ? Style.IVORY[0] : Style.CREAM[0],
                     selected ? Style.IVORY[1] : Style.CREAM[1],
                     selected ? Style.IVORY[2] : Style.CREAM[2], alpha, font);
-            String objective = fit(objective(i), font, w * 0.255f - 30f, 1, 0.3f);
+            String objective = entry == null ? ""
+                    : fit(entry.def.objectiveLine(), font, w * 0.255f - 30f, 1, 0.3f);
             b.textSpaced(objective, rx + 22f, y + 19f, 1, 0.3f,
                     Style.CREAM_DIM[0], Style.CREAM_DIM[1], Style.CREAM_DIM[2], alpha * 0.9f,
                     font);
@@ -240,7 +291,8 @@ public final class QuestsScreen implements Screen {
         }
 
         // Title.
-        String title = NAMES[activeTab][selectedQuest];
+        QuestLog.Entry entry = selected();
+        String title = entry == null ? "NOTHING HERE" : entry.def.title;
         b.textSpacedCentred(title, mx, my + 26f, 2, 2.2f,
                 Style.INK[0], Style.INK[1], Style.INK[2], alpha, font);
         float ulW = title.length() * (font.advance() * 2 + 2.2f);
@@ -250,7 +302,9 @@ public final class QuestsScreen implements Screen {
                 alpha);
 
         // Description, wrapped to the card's inner width.
-        String desc = DESCRIPTIONS[activeTab][selectedQuest];
+        String desc = entry == null
+                ? "NO QUESTS OF THIS KIND HERE YET. WALK FURTHER, AND LOOK CLOSER."
+                : entry.def.summary;
         float maxWidth = cw - 52f;
         String[] lines = UiBatch.wrap(desc, font, 1, 0.35f, maxWidth);
         float ty = my + 56f;
@@ -261,10 +315,23 @@ public final class QuestsScreen implements Screen {
             ty += 12.5f;
         }
 
+        // Where it is, so an entry reads as a place.
+        if (entry != null) {
+            String where = Elaris.regions()[entry.def.region].name
+                    + "  /  LEVEL " + entry.def.level;
+            b.textSpacedCentred(where, mx, ty + 4f, 1, 0.45f,
+                    Style.GOLD[0], Style.GOLD[1], Style.GOLD[2], alpha * 0.85f, font);
+        }
+
         // Stat chips.
         float chipY = cy + ch - 68f;
         String[] chips = {"REWARD", "STATUS", "PROGRESS"};
-        String[] values = {REWARDS[activeTab][selectedQuest], STATUS[selectedQuest], "4/6"};
+        String[] values = entry == null
+                ? new String[]{"-", "-", "-"}
+                : new String[]{entry.def.rewardLine(),
+                        entry.state == QuestLog.DONE ? "COMPLETE"
+                                : entry.def.main ? "MAIN" : "SIDE",
+                        entry.progress + "/" + entry.def.target};
         float chipW = (cw - 78f) / 3f;
         for (int i = 0; i < 3; i++) {
             float chx = cx + 24f + i * (chipW + 15f);
@@ -277,10 +344,11 @@ public final class QuestsScreen implements Screen {
 
         // Shard pips.
         float pipY = cy + ch - 26f;
-        int collected = 4;
+        int pips = entry == null ? 6 : Math.min(6, Math.max(1, entry.def.target));
+        int collected = entry == null ? 0 : (int) Math.floor(entry.fraction() * pips);
         for (int i = 0; i < 6; i++) {
             float px = mx - 47f + i * 19f;
-            boolean filled = i < collected;
+            boolean filled = i < pips && i < collected;
             if (filled) {
                 b.glow(px, pipY, 14f, 10, 1f, 0.86f, 0.45f, 0.35f * alpha);
                 GenshinKit.star4(b, px, pipY, 8f, 2.8f, 1f, 0.88f, 0.52f, alpha);
@@ -322,20 +390,6 @@ public final class QuestsScreen implements Screen {
         return trimmed + "..";
     }
 
-    private String objective(int i) {
-        switch (activeTab) {
-            case 0:
-                return "RETURNED";
-            case 1:
-                return "OPTIONAL";
-            case 3:
-                return "SHRINE DUTY";
-            case 2:
-            default:
-                return "THE SHARDS";
-        }
-    }
-
     private static void stroke(UiBatch b, float[] poly, float t,
                                float r, float g, float bl, float a) {
         int n = poly.length / 2;
@@ -358,6 +412,7 @@ public final class QuestsScreen implements Screen {
             if (Math.abs(x - cx) < w * 0.085f && Math.abs(y - tabY(h)) < 20f) {
                 activeTab = i;
                 selectedQuest = 0;
+                scroll = 0;
                 tabPress[i] = 1f;
                 return Action.NONE;
             }
@@ -366,11 +421,26 @@ public final class QuestsScreen implements Screen {
         float rx = listX();
         float ry = listY(h);
         float rh = rowH();
-        for (int i = 0; i < 5; i++) {
-            float rowTop = ry + i * (rh + 5f);
+        for (int r = 0; r < ROWS; r++) {
+            float rowTop = ry + r * (rh + 5f);
+            int i = scroll + r;
             if (x >= rx && x <= rx + w * 0.255f && y >= rowTop && y <= rowTop + rh) {
-                selectedQuest = i;
-                rowPress[i] = 1f;
+                if (i < rows.size()) {
+                    selectedQuest = i;
+                    rowPress[r] = 1f;
+                }
+                return Action.NONE;
+            }
+        }
+        // Tapping just above or below the list moves it by a row, so a player
+        // with more than five quests can reach them on a phone.
+        if (x >= rx && x <= rx + w * 0.255f) {
+            if (y < ry && scroll > 0) {
+                scroll--;
+                return Action.NONE;
+            }
+            if (y > ry + ROWS * (rh + 5f) && scroll + ROWS < rows.size()) {
+                scroll++;
                 return Action.NONE;
             }
         }

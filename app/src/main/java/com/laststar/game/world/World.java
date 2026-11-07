@@ -395,6 +395,16 @@ public final class World {
     }
 
     /**
+     * Tells the player their run was restored.
+     *
+     * <p>Silently dropping someone into a half-finished run is worse than
+     * saying so; this is the one line that makes a load legible.</p>
+     */
+    public void restoreProgressNote() {
+        showMessage(region.name + " -- WELCOME BACK", 3.0f, 0.8f);
+    }
+
+    /**
      * Restores the level number from a save.
      *
      * <p>Deliberately does not rebuild the level: the save also restores the

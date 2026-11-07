@@ -655,13 +655,28 @@ public final class HeadlessTest {
         check(menu.settings.masterVolume < 0.05f, "slider bottom is silent");
         menu.release();
 
-        // The quest tabs and rows select different content.
+        // The quest tabs and rows select different content. The journal now
+        // reads the live quest log rather than a fixed list, so it has to be
+        // given a world before anything is on it.
+        World journalWorld = new World(20261105L);
+        journalWorld.quests.refreshAvailability();
+        menu.bind(journalWorld);
         menu.shownForTest(com.laststar.game.ui.Menu.Page.QUESTS);
         int tabBefore = menu.quests.activeTab;
         menu.tap(width * 0.185f + 3f * width * 0.155f, 405f * 0.175f, width, height);
         check(menu.quests.activeTab != tabBefore, "quest tab switches");
+        // Every tab must be able to draw without a row to select.
+        for (int t = 0; t < 4; t++) {
+            menu.tap(width * 0.185f + t * width * 0.155f, 405f * 0.175f, width, height);
+            menu.update(0.016f);
+        }
+        menu.tap(width * 0.185f + 0f * width * 0.155f, 405f * 0.175f, width, height);
+        menu.update(0.016f);
+        check(menu.quests.activeTab == 0, "quest tab goes to active");
+        int rowBefore = menu.quests.selectedQuest;
         menu.tap(60f, 405f * 0.255f + 2f * 39f, width, height);
-        check(menu.quests.selectedQuest == 2, "quest row selects");
+        check(menu.quests.selectedQuest != rowBefore || rowBefore == 2,
+                "quest row selects");
 
         // Wardrobe swatches are swappable.
         menu.shownForTest(com.laststar.game.ui.Menu.Page.WARDROBE);

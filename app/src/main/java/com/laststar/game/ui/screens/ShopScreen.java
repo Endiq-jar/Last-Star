@@ -13,6 +13,14 @@ import com.laststar.game.ui.UiBatch;
  */
 public final class ShopScreen implements Screen {
 
+    /** The running game, so the purse shown is the player's real coin. */
+    private com.laststar.game.world.World world;
+
+    @Override
+    public void bind(com.laststar.game.world.World world) {
+        this.world = world;
+    }
+
     private static final String[] NAMES = {
             "EMBER", "LANTERN", "SHARD", "GLASS",
             "CLOAK", "SEAL", "COMPASS", "HORN"
@@ -75,7 +83,9 @@ public final class ShopScreen implements Screen {
         float purseY = h * 0.255f;
         GenshinKit.panel(b, purseX - 66f, purseY - 16f, 132f, 64f, alpha);
         GenshinKit.coin(b, purseX - 36f, purseY + 14f, 12f, alpha);
-        b.textSpacedRight("1840", purseX + 50f, purseY + 7f, 2, 1.2f,
+        // The real purse, not a decorative number.
+        String purse = world == null ? "0" : Integer.toString(world.gold);
+        b.textSpacedRight(purse, purseX + 50f, purseY + 7f, 2, 1.2f,
                 Style.IVORY[0], Style.IVORY[1], Style.IVORY[2], alpha, font);
         b.textSpacedCentred("PURSE", purseX, purseY + 32f, 1, 1.2f,
                 Style.CREAM_DIM[0], Style.CREAM_DIM[1], Style.CREAM_DIM[2], alpha, font);

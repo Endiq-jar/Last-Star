@@ -48,10 +48,9 @@ echo "==> compiling the input-path harness"
   app/src/main/java/com/laststar/game/ui/AtlasFont.java \
   app/src/main/java/com/laststar/game/ui/UiBatch.java \
   app/src/main/java/com/laststar/game/ui/screens/*.java \
-  app/src/main/java/com/laststar/game/core/Vec3.java \
-  app/src/main/java/com/laststar/game/core/Noise.java \
-  app/src/main/java/com/laststar/game/core/Mat4.java \
-  app/src/main/java/com/laststar/game/world/InputState.java \
+  app/src/main/java/com/laststar/game/core/*.java \
+  app/src/main/java/com/laststar/game/world/*.java \
+  app/src/main/java/com/laststar/game/world/lore/*.java \
   app/src/main/java/com/laststar/game/Prefs.java
 
 echo "==> running the input-path verification"

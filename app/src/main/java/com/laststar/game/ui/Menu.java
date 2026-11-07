@@ -35,11 +35,26 @@ public final class Menu {
     public final SettingsScreen settings = new SettingsScreen();
 
     public Page page = Page.HOME;
+    /** The world the menu is reading, or null before start-up. */
+    private com.laststar.game.world.World bound;
     private Screen shown;
     private float fade = 1f;
     private float time;
     /** Set when the player pressed START; consumed by the surface. */
     public boolean startRequested;
+
+    /**
+     * Points every page at the running game.
+     *
+     * <p>Called once at start-up and again whenever a page is opened, so a page
+     * that shows live data -- the journal, the coin purse -- is never drawing a
+     * stale world.</p>
+     */
+    public void bind(com.laststar.game.world.World world) {
+        bound = world;
+        quests.bind(world);
+        shop.bind(world);
+    }
 
     public Menu() {
         shown = home;
@@ -84,6 +99,9 @@ public final class Menu {
         }
         page = p;
         fade = 0f;
+        if (bound != null) {
+            bind(bound);
+        }
         switch (p) {
             case HOME:
                 shown = home;
