@@ -38,7 +38,9 @@ public final class GLES20 {
     public static final int GL_COMPILE_STATUS = 0x8B81;
     public static final int GL_LINK_STATUS = 0x8B82;
     public static final int GL_ARRAY_BUFFER = 0x8892;
+    public static final int GL_ELEMENT_ARRAY_BUFFER = 0x8893;
     public static final int GL_STATIC_DRAW = 0x88E4;
+    public static final int GL_STREAM_DRAW = 0x88E0;
     public static final int GL_RENDERER = 0x1F01;
     public static final int GL_VERSION = 0x1F02;
 
@@ -47,6 +49,11 @@ public final class GLES20 {
 
     public static final java.util.List<String> compiledShaders = new java.util.ArrayList<>();
     public static int draws;
+    public static int bufferUploads;
+    public static int bufferOffsetDraws;
+    public static int clientPointerCalls;
+    public static boolean buffersAvailable = true;
+    public static String versionString = "OpenGL ES 2.0 (fake)";
 
     private static final java.util.Map<Integer, String> shaderSource = new java.util.HashMap<>();
     private static final java.util.Map<Integer, Boolean> shaderOk = new java.util.HashMap<>();
@@ -58,10 +65,15 @@ public final class GLES20 {
         shaderOk.clear();
         nextId = 1;
         draws = 0;
+        bufferUploads = 0;
+        bufferOffsetDraws = 0;
+        clientPointerCalls = 0;
+        buffersAvailable = true;
+        versionString = "OpenGL ES 2.0 (fake)";
     }
 
     public static String glGetString(int name) {
-        return name == GL_VERSION ? "OpenGL ES 2.0 (fake)" : "FakeGPU";
+        return name == GL_VERSION ? versionString : "FakeGPU";
     }
 
     public static int glCreateShader(int type) {
@@ -177,7 +189,7 @@ public final class GLES20 {
 
     public static void glGenBuffers(int n, int[] out, int off) {
         for (int i = 0; i < n; i++) {
-            out[off + i] = nextId++;
+            out[off + i] = buffersAvailable ? nextId++ : 0;
         }
     }
 
@@ -185,6 +197,7 @@ public final class GLES20 {
     }
 
     public static void glBufferData(int target, int size, java.nio.Buffer data, int usage) {
+        bufferUploads++;
     }
 
     public static void glDeleteBuffers(int n, int[] b, int off) {
@@ -221,6 +234,7 @@ public final class GLES20 {
     public static void glVertexAttribPointer(int index, int size, int type,
                                              boolean normalized, int stride,
                                              java.nio.Buffer ptr) {
+        clientPointerCalls++;
     }
 
     /** The int offset overload used when a VBO is bound. */
@@ -235,6 +249,11 @@ public final class GLES20 {
 
     public static void glDrawElements(int mode, int count, int type, java.nio.Buffer idx) {
         draws++;
+    }
+
+    public static void glDrawElements(int mode, int count, int type, int offset) {
+        draws++;
+        bufferOffsetDraws++;
     }
 
     public static void glEnable(int cap) {

@@ -89,22 +89,48 @@ public final class GlProgram {
     }
 
     public void bindMesh(Mesh mesh) {
+        boolean vbo = mesh.usesVbos();
         if (aPosition >= 0) {
             GLES20.glEnableVertexAttribArray(aPosition);
-            GLES20.glVertexAttribPointer(aPosition, 3, GLES20.GL_FLOAT, false, mesh.stride, mesh.positions);
+            if (vbo) {
+                GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, mesh.positionVbo);
+                GLES20.glVertexAttribPointer(aPosition, 3, GLES20.GL_FLOAT, false, mesh.stride, 0);
+            } else {
+                GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+                GLES20.glVertexAttribPointer(aPosition, 3, GLES20.GL_FLOAT, false, mesh.stride, mesh.positions);
+            }
         }
         if (aNormal >= 0 && mesh.normals != null) {
             GLES20.glEnableVertexAttribArray(aNormal);
-            GLES20.glVertexAttribPointer(aNormal, 3, GLES20.GL_FLOAT, false, mesh.stride, mesh.normals);
+            if (vbo) {
+                GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, mesh.normalVbo);
+                GLES20.glVertexAttribPointer(aNormal, 3, GLES20.GL_FLOAT, false, mesh.stride, 0);
+            } else {
+                GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+                GLES20.glVertexAttribPointer(aNormal, 3, GLES20.GL_FLOAT, false, mesh.stride, mesh.normals);
+            }
         }
         if (aColor >= 0 && mesh.colors != null) {
             GLES20.glEnableVertexAttribArray(aColor);
-            GLES20.glVertexAttribPointer(aColor, 4, GLES20.GL_FLOAT, false, mesh.stride, mesh.colors);
+            if (vbo) {
+                GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, mesh.colorVbo);
+                GLES20.glVertexAttribPointer(aColor, 4, GLES20.GL_FLOAT, false, mesh.stride, 0);
+            } else {
+                GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+                GLES20.glVertexAttribPointer(aColor, 4, GLES20.GL_FLOAT, false, mesh.stride, mesh.colors);
+            }
         }
         if (aWave >= 0 && mesh.waves != null) {
             GLES20.glEnableVertexAttribArray(aWave);
-            GLES20.glVertexAttribPointer(aWave, 1, GLES20.GL_FLOAT, false, mesh.stride, mesh.waves);
+            if (vbo) {
+                GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, mesh.waveVbo);
+                GLES20.glVertexAttribPointer(aWave, 1, GLES20.GL_FLOAT, false, mesh.stride, 0);
+            } else {
+                GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+                GLES20.glVertexAttribPointer(aWave, 1, GLES20.GL_FLOAT, false, mesh.stride, mesh.waves);
+            }
         }
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
     }
 
     public void unbindMesh(Mesh mesh) {

@@ -2,6 +2,7 @@ package com.laststar.game.ui;
 
 import android.opengl.GLES20;
 
+import com.laststar.game.gl.GlCapabilities;
 import com.laststar.game.gl.GlProgram;
 
 import java.nio.ByteBuffer;
@@ -160,7 +161,11 @@ public final class UiRenderer {
         this.whiteUv = new float[]{whiteU, whiteV};
 
         GLES20.glGenBuffers(1, vbo, 0);
-        useVbo = true;
+        useVbo = vbo[0] != 0;
+        if (!useVbo && GlCapabilities.detectCurrentContext()
+                .atLeast(GlCapabilities.Api.GLES3_0)) {
+            throw new IllegalStateException("GLES3 UI requires a streaming VBO");
+        }
     }
 
     private float[] whiteUv = {0f, 0f};
@@ -212,16 +217,27 @@ public final class UiRenderer {
         fb.position(0);
 
         int stride = floatsPerVertex * 4;
-        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
-        fb.position(0);
         GLES20.glEnableVertexAttribArray(aPos);
-        GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, stride, fb);
-        fb.position(2);
         GLES20.glEnableVertexAttribArray(aUv);
-        GLES20.glVertexAttribPointer(aUv, 2, GLES20.GL_FLOAT, false, stride, fb);
-        fb.position(4);
         GLES20.glEnableVertexAttribArray(aColor);
-        GLES20.glVertexAttribPointer(aColor, 4, GLES20.GL_FLOAT, false, stride, fb);
+        if (vbo[0] != 0) {
+            // Stream the whole UI batch once; ES3 forbids client-side arrays.
+            GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vbo[0]);
+            GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, needed * 4, fb, GLES20.GL_STREAM_DRAW);
+            GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, stride, 0);
+            GLES20.glVertexAttribPointer(aUv, 2, GLES20.GL_FLOAT, false, stride, 2 * 4);
+            GLES20.glVertexAttribPointer(aColor, 4, GLES20.GL_FLOAT, false, stride, 4 * 4);
+            GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+        } else {
+            // GLES2-only compatibility fallback for devices without VBO support.
+            GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+            fb.position(0);
+            GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, stride, fb);
+            fb.position(2);
+            GLES20.glVertexAttribPointer(aUv, 2, GLES20.GL_FLOAT, false, stride, fb);
+            fb.position(4);
+            GLES20.glVertexAttribPointer(aColor, 4, GLES20.GL_FLOAT, false, stride, fb);
+        }
 
         GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, verts.size());
 

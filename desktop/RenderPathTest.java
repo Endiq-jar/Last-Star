@@ -2,6 +2,7 @@ import android.opengl.GLES20;
 
 import com.laststar.game.core.Camera;
 import com.laststar.game.gl.SceneRenderer;
+import com.laststar.game.ui.UiBatch;
 import com.laststar.game.ui.UiRenderer;
 import com.laststar.game.world.World;
 
@@ -105,10 +106,68 @@ public final class RenderPathTest {
                 System.out.println("  FAIL frame issued only " + GLES20.draws + " draw calls");
             }
             System.out.println("- frame: " + GLES20.draws + " draw calls");
+            checks++;
+            if (GLES20.bufferUploads == 0 || GLES20.bufferOffsetDraws == 0
+                    || GLES20.clientPointerCalls != 0) {
+                failures++;
+                System.out.println("  FAIL VBO path did not upload and draw indexed GPU buffers");
+            }
         } catch (Throwable t) {
             failures++;
             System.out.println("  FAIL drawing a frame threw: " + t);
             t.printStackTrace();
+        }
+
+        // 6. If buffer allocation fails, the ES2 compatibility path must keep
+        //    rendering rather than leaving a blank frame.
+        GLES20.reset();
+        GLES20.buffersAvailable = false;
+        try {
+            World world = new World(9191L);
+            SceneRenderer scene = new SceneRenderer();
+            scene.init(world, null);
+            world.beginRun();
+            Camera camera = new Camera();
+            camera.snapBehind(world);
+            camera.update(1f / 60f, world, null, 0f);
+            scene.prepareFrame(world, camera, 4f / 3f);
+            scene.draw(world, camera, 4f / 3f, 1f / 60f, 0f);
+            UiRenderer uiFallback = new UiRenderer();
+            uiFallback.init();
+            UiBatch batch = new UiBatch();
+            batch.begin(320, 240);
+            batch.quad(10, 10, 80, 40, 0.2f, 0.3f, 0.8f, 1f);
+            ui.draw(batch, 320, 240);
+            checks++;
+            if (GLES20.draws < 5 || GLES20.clientPointerCalls == 0) {
+                failures++;
+                System.out.println("  FAIL ES2 compatibility arrays did not render");
+            } else {
+                System.out.println("- buffer-allocation fallback: client arrays rendered");
+            }
+        } catch (Throwable t) {
+            failures++;
+            System.out.println("  FAIL ES2 fallback path threw: " + t);
+            t.printStackTrace();
+        }
+
+        // ES3 cannot legally fall back to client-side arrays. If its mandatory
+        // VBO path is unavailable, fail explicitly rather than render corruptly.
+        GLES20.reset();
+        GLES20.buffersAvailable = false;
+        GLES20.versionString = "OpenGL ES 3.2 (fake)";
+        boolean es3RejectedUnsafeFallback = false;
+        try {
+            new SceneRenderer().init(new World(5151L), null);
+        } catch (IllegalStateException expected) {
+            es3RejectedUnsafeFallback = expected.getMessage().contains("GLES3 requires VBO");
+        }
+        checks++;
+        if (!es3RejectedUnsafeFallback || GLES20.clientPointerCalls != 0) {
+            failures++;
+            System.out.println("  FAIL GLES3 attempted an invalid client-array fallback");
+        } else {
+            System.out.println("- GLES3 without VBOs: rejected unsafe client-array fallback");
         }
 
         System.out.println();

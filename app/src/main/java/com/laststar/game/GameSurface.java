@@ -18,9 +18,13 @@ import com.laststar.game.ui.UiBatch;
 import com.laststar.game.ui.UiRenderer;
 import com.laststar.game.world.InputState;
 import com.laststar.game.world.Player;
+import com.laststar.game.world.WeatherSystem;
 import com.laststar.game.world.World;
 
+import javax.microedition.khronos.egl.EGL10;
 import javax.microedition.khronos.egl.EGLConfig;
+import javax.microedition.khronos.egl.EGLContext;
+import javax.microedition.khronos.egl.EGLDisplay;
 import javax.microedition.khronos.opengles.GL10;
 
 /**
@@ -60,11 +64,92 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
     private boolean debugOverlay;
     private float nightAmount;
 
+    private static final class FallbackEglConfigChooser implements GLSurfaceView.EGLConfigChooser {
+        private static final int EGL_RENDERABLE_TYPE = 0x3040;
+        private static final int EGL_SURFACE_TYPE = 0x3033;
+        private static final int EGL_WINDOW_BIT = 0x0004;
+        private static final int EGL_OPENGL_ES2_BIT = 0x0004;
+        private static final int EGL_OPENGL_ES3_BIT_KHR = 0x0040;
+        private static final int EGL_RED_SIZE = 0x3024;
+        private static final int EGL_GREEN_SIZE = 0x3023;
+        private static final int EGL_BLUE_SIZE = 0x3022;
+        private static final int EGL_ALPHA_SIZE = 0x3021;
+        private static final int EGL_DEPTH_SIZE = 0x3025;
+        private static final int EGL_NONE = 0x3038;
+
+        @Override
+        public EGLConfig chooseConfig(EGL10 egl, EGLDisplay display) {
+            int both = EGL_OPENGL_ES2_BIT | EGL_OPENGL_ES3_BIT_KHR;
+            EGLConfig config = choose(egl, display, both);
+            if (config != null) return config;
+            config = choose(egl, display, EGL_OPENGL_ES2_BIT);
+            if (config != null) return config;
+            throw new IllegalArgumentException("No EGL config supports GLES2 or GLES3 rendering");
+        }
+
+        private EGLConfig choose(EGL10 egl, EGLDisplay display, int renderable) {
+            int[] spec = {
+                    EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_BLUE_SIZE, 8,
+                    EGL_ALPHA_SIZE, 0, EGL_DEPTH_SIZE, 16,
+                    EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+                    EGL_RENDERABLE_TYPE, renderable,
+                    EGL_NONE
+            };
+            int[] count = new int[1];
+            if (!egl.eglChooseConfig(display, spec, null, 0, count) || count[0] <= 0) return null;
+            EGLConfig[] configs = new EGLConfig[count[0]];
+            if (!egl.eglChooseConfig(display, spec, configs, configs.length, count)
+                    || count[0] <= 0) return null;
+            return configs[0];
+        }
+    }
+
+    private static final class FallbackEglContextFactory implements GLSurfaceView.EGLContextFactory {
+        private static final int EGL_CONTEXT_CLIENT_VERSION = 0x3098;
+        private static final int EGL_CONTEXT_MINOR_VERSION_KHR = 0x30FB;
+        private static final int EGL_NONE = 0x3038;
+
+        @Override
+        public EGLContext createContext(EGL10 egl, EGLDisplay display, EGLConfig config) {
+            String extensions = egl.eglQueryString(display, EGL10.EGL_EXTENSIONS);
+            boolean khrCreateContext = extensions != null
+                    && extensions.contains("EGL_KHR_create_context");
+            if (khrCreateContext) {
+                EGLContext context = attempt(egl, display, config, new int[]{
+                        EGL_CONTEXT_CLIENT_VERSION, 3, EGL_CONTEXT_MINOR_VERSION_KHR, 2, EGL_NONE});
+                if (context != null) return context;
+                context = attempt(egl, display, config, new int[]{
+                        EGL_CONTEXT_CLIENT_VERSION, 3, EGL_CONTEXT_MINOR_VERSION_KHR, 1, EGL_NONE});
+                if (context != null) return context;
+            }
+
+            EGLContext context = attempt(egl, display, config,
+                    new int[]{EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE});
+            if (context != null) return context;
+            context = attempt(egl, display, config,
+                    new int[]{EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE});
+            if (context != null) return context;
+            throw new IllegalStateException("EGL could not create GLES 3.2, 3.1, 3.0 or 2.0 context");
+        }
+
+        private EGLContext attempt(EGL10 egl, EGLDisplay display, EGLConfig config, int[] attrs) {
+            EGLContext context = egl.eglCreateContext(display, config, EGL10.EGL_NO_CONTEXT, attrs);
+            if (context == null || context == EGL10.EGL_NO_CONTEXT) return null;
+            return context;
+        }
+
+        @Override
+        public void destroyContext(EGL10 egl, EGLDisplay display, EGLContext context) {
+            egl.eglDestroyContext(display, context);
+        }
+    }
+
     public GameSurface(Context context) {
         super(context);
-        // GLES2 keeps the APK compatible with every device from Android 5 up.
-        setEGLContextClientVersion(2);
-        setEGLConfigChooser(8, 8, 8, 0, 16, 0);
+        // Prefer the highest ES profile the EGL driver can actually create,
+        // falling back through ES3.1/3.0 to the proven ES2 compatibility path.
+        setEGLConfigChooser(new FallbackEglConfigChooser());
+        setEGLContextFactory(new FallbackEglContextFactory());
         setPreserveEGLContextOnPause(true);
         setRenderer(this);
         setRenderMode(RENDERMODE_CONTINUOUSLY);
@@ -273,6 +358,7 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
             return;
         }
 
+        drawWeather(batch, vw, vh);
         hud.update(dt);
         hud.draw(batch, world, controls, debugOverlay);
         uiRenderer.draw(batch, screenW, screenH);
@@ -283,6 +369,43 @@ public final class GameSurface extends GLSurfaceView implements GLSurfaceView.Re
      * a flat colour: a blank screen is indistinguishable from a frozen app, and
      * that is exactly how a shader bug shipped unnoticed.
      */
+    private void drawWeather(UiBatch batch, float width, float height) {
+        WeatherSystem.Sample weather = WeatherSystem.sample(world.regionIndex,
+                world.region().snow, world.worldTime);
+        if (weather.type == WeatherSystem.Type.CLEAR || weather.intensity <= 0f) return;
+
+        if (weather.type == WeatherSystem.Type.MIST) {
+            batch.quad(0f, 0f, width, height, 0.56f, 0.66f, 0.82f,
+                    weather.intensity * 0.10f);
+            return;
+        }
+
+        float t = world.worldTime;
+        int interval = (int) (t / 120f);
+        if (weather.type == WeatherSystem.Type.RAIN) {
+            for (int i = 0; i < 72; i++) {
+                float seed = i * 17.37f + interval * 31.1f;
+                float x = fract(seed * 0.173f + t * 0.39f) * width;
+                float y = fract(seed * 0.317f + t * 1.65f) * height;
+                batch.line(x, y, x - 7f, y + 15f, 1.1f,
+                        0.62f, 0.78f, 1.0f, weather.intensity * 0.38f);
+            }
+        } else {
+            for (int i = 0; i < 42; i++) {
+                float seed = i * 29.71f + interval * 13.7f;
+                float x = fract(seed * 0.137f + t * 0.035f) * width;
+                float y = fract(seed * 0.293f + t * 0.20f) * height;
+                float radius = 1.1f + fract(seed * 0.071f) * 1.8f;
+                batch.circle(x, y, radius, 7, 0.91f, 0.95f, 1.0f,
+                        weather.intensity * 0.60f);
+            }
+        }
+    }
+
+    private static float fract(float value) {
+        return value - (float) Math.floor(value);
+    }
+
     private void drawStartupFailure() {
         android.opengl.GLES20.glClearColor(0.05f, 0.06f, 0.09f, 1f);
         android.opengl.GLES20.glClear(android.opengl.GLES20.GL_COLOR_BUFFER_BIT);

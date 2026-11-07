@@ -7,6 +7,7 @@ import com.laststar.game.world.QuestLog;
 import com.laststar.game.world.Inventory;
 import com.laststar.game.world.Party;
 import com.laststar.game.world.SaveGame;
+import com.laststar.game.world.WeatherSystem;
 import com.laststar.game.world.SpellBook;
 import com.laststar.game.world.World;
 import com.laststar.game.world.lore.Elaris;
@@ -59,6 +60,7 @@ public final class SystemsTest {
         uiPalette();
         glCapabilityParsing();
         dayNightCycle();
+        weatherSystem();
 
         System.out.println(checks + " checks, " + failures + " failures");
         if (failures > 0) {
@@ -76,6 +78,21 @@ public final class SystemsTest {
         check("magic pink is #F2A1F2", rgb(Style.PINK, 0xf2, 0xa1, 0xf2));
         check("reward gold is #F7B769", rgb(Style.GOLD, 0xf7, 0xb7, 0x69));
         check("primary text is #F5F0FF", rgb(Style.IVORY, 0xf5, 0xf0, 0xff));
+    }
+
+    private static void weatherSystem() {
+        WeatherSystem.Sample cold = WeatherSystem.sample(5, 0.8f, 0f);
+        WeatherSystem.Sample warm = WeatherSystem.sample(0, 0.0f, 0f);
+        WeatherSystem.Sample repeat = WeatherSystem.sample(5, 0.8f, 0f);
+        check("snowy regions do not receive rain fronts", cold.type != WeatherSystem.Type.RAIN);
+        check("warm regions do not receive snow fronts", warm.type != WeatherSystem.Type.SNOW);
+        check("weather is reproducible from region and saved time", cold.type == repeat.type
+                && cold.intensity == repeat.intensity);
+        boolean changed = false;
+        for (int i = 1; i < 20; i++) {
+            if (WeatherSystem.sample(0, 0f, i * 120f).type != warm.type) changed = true;
+        }
+        check("weather fronts evolve over simulation time", changed);
     }
 
     private static void dayNightCycle() {
